@@ -37,7 +37,7 @@ cutMotors = True
 ###################################
 Quad = Multirotor.Multirotor(fuselageMass = 0.5) # default is quadrotor
 idx = 0
-dt = 0.005
+dt = 0.002
 T = 1.3
 numsteps = 3
 maxInd = int(math.ceil(T/dt))
@@ -280,8 +280,8 @@ def runDynamics():
     Time = clock.time()
     dT = Time - runDynamics.lastTime
     wind = windvel + np.random.randn(3,1)
-    #if (dT < period):
-    #    return
+    if (dT < period):
+        return
     # else update state
     disturbance = 10
     if (Time - startTime > 2 and Time - startTime < 10):
