@@ -55,3 +55,7 @@ docs/_build/
 
 # PyBuilder
 target/
+
+# mvim
+*.swp
+*_DS_Store
