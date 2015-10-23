@@ -13,6 +13,7 @@ import Multirotor
 import AeroQuaternion as AQ
 import QuadrotorController
 import KinematicEKF
+import KalmanFilter as KFilt
 # shark imports
 import Shark
 
@@ -49,11 +50,12 @@ commands = [0.5,0.5,0.5,0.5]
 windvel = np.zeros((3,1))
 # run for a whil
 controller = QuadrotorController.Controller()
-EKF = KinematicEKF.kinematicQuadEKF()
+KF = KFilt.KF()
 AttEstimator = KinematicEKF.AttitudeComplementaryFilter(initialAttitude=AQ.Quaternion(np.array(attEst)), timeConstant = 10.,Kbias = .00)
 reference = [0.,0.,5.,0.]
 time = 0.
 lastTime = 0.
+lastGPS = 0.
 startTime = clock.time()
 period = dt
 Quad.stateVector[0,2] = 0. # initial height
@@ -271,6 +273,7 @@ def runDynamics():
     global period
     global commands
     global Quad
+    global KF
     global reference
     global position
     global attitude
@@ -280,6 +283,7 @@ def runDynamics():
     global cutMotors
     global yawCmd
     global lastTime
+    global lastGPS
     # timing stuff
     Time = clock.time()
     dT = Time - runDynamics.lastTime
@@ -296,8 +300,8 @@ def runDynamics():
 
     state,acc = Quad.updateState(dt,commands,windVelocity = wind,disturbance = disturbance)
     # simulate measurements
-    accMeas = acc + .00*np.array([np.random.randn(3)]).T + np.array([[.0],[0],[0]]) 
-    gyroMeas = state.T[10:] + .0*np.array([np.random.randn(3)]).T + np.array([[0.00],[0],[.00]]) #+ np.array
+    accMeas = acc + .01*np.array([np.random.randn(3)]).T + np.array([[.0],[0],[0]]) 
+    gyroMeas = state.T[10:] + .1*np.array([np.random.randn(3)]).T + np.array([[0.00],[0],[.00]]) #+ np.array
     attTrue = AQ.Quaternion(state[0,6:10])
     earthMagReading = np.array([[.48407,.12519,.8660254]]).T
     #earthMagReading = np.array([[2., 0., 10. ]]).T
@@ -305,8 +309,17 @@ def runDynamics():
     magMeas = np.dot(attTrue.asRotMat,earthMagReading) + .1*np.array([np.random.randn(3)]).T
     otherMeas = []
     otherMeas.append(['mag',magMeas,earthMagReading])
+    # gps update?
+    if (Time - lastGPS > 0.2):
+      gpsMeas = state[0:1,0:3].T
+      #print gpsMeas
+      otherMeas.append(['gps',gpsMeas,1*np.diag([1,1,10])])
+      lastGPS = Time
     # run attitude filter
     attitudeAndGyroBias = AttEstimator.runFilter(accMeas,gyroMeas,otherMeas,dt)
+    quatEst = attitudeAndGyroBias[0]
+    acc_net_world = np.dot(quatEst.asRotMat.T,accMeas) - np.array([[0,0,-9.81]]).T
+    stateAndCovariance = KF.runFilter(acc_net_world,otherMeas,dt)
     # update control
     controlState = state.copy()
     qx,qy,qz,qw = attitudeAndGyroBias[0].q
@@ -399,6 +412,8 @@ def display():
     global attitude
     global attEst
     global cameraMode
+    global KF
+    positionEst = KF.state[0:3,0:1]
     glLoadIdentity()
     gl_R_ned = AQ.Quaternion(np.array([0,180,-90]))
     veh_R_ned = AQ.Quaternion(attitude)
@@ -465,7 +480,8 @@ def display():
     color = [1.,1.,0.,1.]
     glMaterialfv(GL_FRONT,GL_EMISSION,color)
 
-    glTranslate(position[0,0],position[1,0],position[2,0])
+    #glTranslate(position[0,0],position[1,0],position[2,0])
+    glTranslate(positionEst[0,0],positionEst[1,0],positionEst[2,0])
     glRotate(attEst[2],0,0,1)
     glRotate(attEst[1],0,1,0)
     glRotate(attEst[0],1,0,0)

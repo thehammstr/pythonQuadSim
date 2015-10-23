@@ -15,6 +15,8 @@ class Propeller:
 # Methods
 
     # constructor
+    # radius = .127 : 5 in radius
+    # radius = .1905 : 7.5 in radius
     def __init__(self, J = 0.00026, mass = .01255, radius = 0.127, cT = 0.02, cQ = .003, cM = 0.0001): # these are defaults, based on 10.98 DJI prop tests
         self.J = J
         self.mass = mass
@@ -23,6 +25,9 @@ class Propeller:
         self.cQ = cQ
         self.cM = cM
         return
+
+    def getMass(self):
+       return self.mass
 
     # Thrust coefficient correction as function of inflow
     def cTo(self, vPar):

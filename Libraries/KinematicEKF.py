@@ -341,7 +341,7 @@ class AttitudeComplementaryFilter:
         axisSinAngle = np.cross(magInWorld.T,worldMag.T).T
         angle = np.arcsin(np.linalg.norm(axisSinAngle))
         axis = (1./(np.linalg.norm(axisSinAngle) + 1e-5))*axisSinAngle
-        print axis.T,angle
+        #print axis.T,angle
         #axis = np.dot(attHat.asRotMat,axis)
         qMag = AQ.quatFromAxisAngle(axis,angle*alpha)
         return attHat*qMag #qMag*attHat #AQ.slerp(attHat,qMag,alpha)

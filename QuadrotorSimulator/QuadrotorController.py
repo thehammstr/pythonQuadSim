@@ -11,7 +11,6 @@ def angleFromTo(angle, min, max):
     return angle;
 
 
-
 class PIDgains:
     Kp = 0.
     Ki = 0.
@@ -42,12 +41,13 @@ class SecondOrderFilter:
        class for performing second-order lowpass filter operation
        supports slew rate limiting 
     '''
-    def __init__(self, wn = 10, maxSlew = 10000000, minSlew = -10000000, wrap_pi = False):
+    def __init__(self, wn = 10., maxSlew = 1000., minSlew = -100., wrap_pi = False):
         self.wn = wn
-        self.v = 0
-        self.x = 0
+        self.a = 0.
+        self.v = 0.
+        self.x = 0.
         self.maxSlew = maxSlew
-        if (minSlew < 0):
+        if (minSlew < 0.):
             self.minSlew = minSlew
         else:
             self.minSlew = -minSlew
@@ -66,8 +66,9 @@ class SecondOrderFilter:
             #            print "fixd.x", self.x, '\n'
         #a =  -2*self.wn*self.v - (self.wn**2)*self.x + (self.wn**2)*input
         a =  -2*self.wn*self.v + (self.wn**2)*angleFromTo(input - self.x,-np.pi,np.pi) # <--- Important addition, makes sure lowpassed angles go the right way!
-        self.x = self.x + self.v*dt
-        self.v = max(min(self.v + a*dt,self.maxSlew),self.minSlew)
+        self.x = self.x + self.v*dt  
+        self.v = max(min(self.v + self.a*dt,self.maxSlew),self.minSlew)
+        self.a = a
         return [self.x, self.v]
 
     def filter(self,input,dt):
@@ -82,9 +83,10 @@ class SecondOrderFilter:
             #                    input+=2*np.pi
             #            print "fixd.x", self.x, '\n'
         #a =  -2*self.wn*self.v - (self.wn**2)*self.x + (self.wn**2)*input
-        a =  -2*self.wn*self.v + (self.wn**2)*(input - self.x) # <--- Important addition, makes sure lowpassed angles go the right way!
-        self.x = self.x + self.v*dt
-        self.v = max(min(self.v + a*dt,self.maxSlew),self.minSlew)
+        a =  -2.*self.wn*self.v + (self.wn**2)*(input - self.x) # <--- Important addition, makes sure lowpassed angles go the right way!
+        self.x = self.x + self.v*dt 
+        self.v = max(min(self.v + self.a*dt,self.maxSlew),self.minSlew)
+        self.a = a
         return [self.x, self.v]
 
 
@@ -92,6 +94,7 @@ class SecondOrderFilter:
        # resets values (but not wn) to zero
        self.x = 0
        self.v = 0
+       self.a = 0
 
 
 class Controller:
@@ -101,37 +104,40 @@ class Controller:
     maxDescRate = -.25
     referenceAngles = []
     referenceRates = []
-    wnCmd = 12.
-    wnYawCmd = .8
+    wnCmd = 10.
+    wnYawCmd = 4.
     RollCmdFilter = SecondOrderFilter(wn=wnCmd)
     PitchCmdFilter = SecondOrderFilter(wn=wnCmd)
     YawCmdFilter = SecondOrderFilter(wn=wnYawCmd, wrap_pi=True)
     HtCmdFilter = SecondOrderFilter(wn=10,maxSlew = 3.,minSlew = -3)
+    CollectiveFilter = SecondOrderFilter(wn=100,maxSlew = .01,minSlew = -.01)
+    CollectiveFilter.x = .2
 
 
 #0.4, 0.13, 0.08, .0054);
+#0.4, 0.13, 0.08, .0054);
     def __init__(self):
         # angular rate gains
-        self.gains.rollRate.Kp = 0.2
-        self.gains.rollRate.Ki = 0.003
-        self.gains.rollRate.Kd = 0.1
-        self.gains.pitchRate.Kp = 0.4
-        self.gains.pitchRate.Ki = 0.03
-        self.gains.pitchRate.Kd = 0.1
-        self.gains.yawRate.Kp = .4
-        self.gains.yawRate.Ki = 0.03
-        self.gains.yawRate.Kd = 0.01
+        self.gains.rollRate.Kp = 0.15
+        self.gains.rollRate.Ki = 0.01
+        self.gains.rollRate.Kd = 0.004
+        self.gains.pitchRate.Kp = 0.15 
+        self.gains.pitchRate.Ki = 0.01
+        self.gains.pitchRate.Kd = 0.004
+        self.gains.yawRate.Kp = .2
+        self.gains.yawRate.Ki = 0.02
+        self.gains.yawRate.Kd = 0.001
         # attitude gains
-        self.gains.roll.Kp = .2
-        self.gains.roll.Ki = .1
-        self.gains.pitch.Kp = .2
-        self.gains.pitch.Ki = .1
+        self.gains.roll.Kp = 4.5
+        self.gains.roll.Ki = .0
+        self.gains.pitch.Kp = 4.5
+        self.gains.pitch.Ki = .0
         self.gains.yaw.Kp = .3
         self.gains.yaw.Ki = .01
         # position
-        self.gains.alt.Kp = .2
-        self.gains.alt.Ki = .005
-        self.gains.alt.Kd = .1
+        self.gains.alt.Kp =  .3
+        self.gains.alt.Ki = .01
+        self.gains.alt.Kd = .0
         self.gains.x.Kp = .5
         self.gains.x.Ki = .01
         self.gains.x.Kd = .0
@@ -142,12 +148,12 @@ class Controller:
         self.gains.vx.Kp = .2
         self.gains.vx.Ki = .01
         self.gains.vx.Kd = .01
-        self.gains.vy.Kp = .3
+        self.gains.vy.Kp = .2
         self.gains.vy.Ki = .01
         self.gains.vy.Kd = .01
-        self.gains.vz.Kp = .8
-        self.gains.vz.Ki = .01
-        self.gains.vz.Kd = .0
+        self.gains.vz.Kp = 1.0
+        self.gains.vz.Ki = .2 #.01
+        self.gains.vz.Kd =  0.
         # filtered values
         self.filteredRollCmd = 0.
         self.filteredPitchCmd = 0.
@@ -186,11 +192,24 @@ class Controller:
         attitude = AQ.Quaternion(np.array([qx,qy,qz,qw])) 
         worldVel = np.dot(attitude.asRotMat.T,np.array([[u],[v],[w]]))
         roll,pitch,yaw = np.pi/180*attitude.asEuler # convert to rad
+        MAX_ANGLE = 50.*np.pi/180
+        MAX_VEL = 9.
+        MAX_VEL_Z = 3.
+        MAX_YR = 1.
+
+
         if (refType == 'rpya'):
             rollRef,pitchRef,yawRef,hRef = reference
-            rollRef = max(min(rollRef,.5),-.5)
-            pitchRef = max(min(pitchRef,.5),-.5)
+            rollRef = max(min(rollRef,MAX_ANGLE),-MAX_ANGLE)
+            pitchRef = max(min(pitchRef,MAX_ANGLE),-MAX_ANGLE)
             yawRef = angleFromTo(yawRef,-np.pi,np.pi)
+            zErr = -hRef - z
+            self.heightErrorInt = self.heightErrorInt + zErr*dT
+            vzCmd = min(max(self.gains.alt.Ki*self.heightErrorInt + self.gains.alt.Kp*zErr,-MAX_VEL_Z),MAX_VEL_Z)
+            vzErr = (vzCmd - worldVel[2,0])
+            vzErrDeriv = (vzErr - self.lastvzErr)/dT
+            self.lastvzErr = vzErr
+            collective = min(max( .43 - self.gains.alt.Kp*vzErr - self.gains.alt.Kd*vzErrDeriv, 0),1)
             self.posXerrorInt = 0.
             self.posYerrorInt = 0.
             self.heightErrorInt = 0.
@@ -221,8 +240,7 @@ class Controller:
             KiPos = 0.#self.gains.x.Ki
             KpPos = self.gains.x.Kp
             KpVel = self.gains.vx.Kp
-            MAX_ANGLE = .4
-            MAX_VEL = 10.
+            MAX_VEL = 9.
             MAX_YR = 1.
             # Velocity gains from reference positions
             vxCmd = KiPos*xErrIntBody + KpPos*xErrBody
@@ -233,6 +251,7 @@ class Controller:
                 vxCmd = MAX_VEL*vxCmd/vMag
                 vyCmd = MAX_VEL*vyCmd/vMag
                 saturateFlag = True
+            #command vz and yaw rate
             vzCmd = min(max(self.gains.alt.Ki*self.heightErrorInt + self.gains.alt.Kp*zErr,-MAX_VEL),MAX_VEL)
             yrCmd = min(max(self.gains.yaw.Ki*self.yawErrorInt + self.gains.yaw.Kp*yawErr,-MAX_YR),MAX_YR)
             #print 'commands (vx, vy, vz, yr):', vxCmd,vyCmd,vzCmd,yrCmd
@@ -284,25 +303,8 @@ class Controller:
             rollRef = min(max(self.gains.vy.Kp*vyErr + self.gains.vy.Kd*vyErrDeriv,-MAX_ANGLE),MAX_ANGLE)
             pitchRef = min(max(-self.gains.vx.Kp*vxErr - self.gains.vx.Kd*vxErrDeriv,-MAX_ANGLE),MAX_ANGLE)
             collective = min(max( .43 - self.gains.alt.Kp*vzErr - self.gains.alt.Kd*vzErrDeriv, 0),1)
-            #print 'coll:',collective
-            '''# anti-windup by backsolve
-            saturateFlag = False
-            if(KiPos > 0):
-             if(rollRef == MAX_ANGLE and yErrBody > 0.):
-               yErrIntBody  = 1./KiPos*(MAX_ANGLE - KpPos*yErrBody + KpVel*v)
-               saturateFlag = True
-             elif(rollRef == -MAX_ANGLE and yErrBody < 0.):
-               yErrIntBody  = 1./KiPos*(-MAX_ANGLE - KpPos*yErrBody + KpVel*v)
-               saturateFlag = True
-             if(pitchRef == MAX_ANGLE and xErrBody > 0.):
-               xErrIntBody  = -1./KiPos*(MAX_ANGLE + KpPos*xErrBody - KpVel*v)
-               saturateFlag = True
-             elif(pitchRef == -MAX_ANGLE and xErrBody < 0.):
-               xErrIntBody  = -1./KiPos*(-MAX_ANGLE + KpPos*xErrBody - KpVel*v)
-               saturateFlag = True
-             if(saturateFlag):
-               self.posXerrorInt = np.cos(yaw)*xErrIntBody - np.sin(yaw)*yErrIntBody
-               self.posYerrorInt = np.sin(yaw)*xErrIntBody + np.cos(yaw)*yErrIntBody'''
+            #collective = min(max( .55 - self.gains.alt.Kp*vzErr - self.gains.alt.Kd*vzErrDeriv, 0),1)
+            
         elif (refType == 'rpYRt'):
             rollRef,pitchRef,yawRateRef,collective = reference
             #print 'reference',reference
@@ -321,8 +323,8 @@ class Controller:
         self.filteredPitchCmd, self.filteredWyCmd = self.PitchCmdFilter.filterAngle(pitchRef,dT)
         self.filteredYawCmd, self.filteredWzCmd   = self.YawCmdFilter.filterAngle(yawRef,dT)
         self.filteredHtCmd, self.filteredZdotCmd  = self.HtCmdFilter.filter(hRef,dT)
-        
-        
+        #collective,collDot = self.CollectiveFilter.filter(collective,dT)
+        #print "coll: ", collective        
         ################################
         ## BEGIN LOW-LEVEL CONTROLLER
         ################################
@@ -330,9 +332,9 @@ class Controller:
         rollError = self.filteredRollCmd - roll
         pitchError = self.filteredPitchCmd - pitch
         yawError = angleFromTo(self.filteredYawCmd - yaw, -math.pi, math.pi)
-        #print yawError
-        self.rollErrorInt += rollError*dT
-        self.pitchErrorInt += pitchError*dT
+        #print rollError
+        #self.rollErrorInt += rollError*dT
+        #self.pitchErrorInt += pitchError*dT
 
 
         rollRateError = self.filteredWxCmd - p
@@ -345,11 +347,11 @@ class Controller:
         heightRateError = self.filteredZdotCmd - (-w) 
         #print 'err ht: ',heightError,'ref: ',reference,'filt ht cmd: ',self.filteredHtCmd,'href: ',hRef
 
-        alf = .5
-        self.filtpDotErr = .5*self.filtpDotErr + (1-alf)*(rollRateError-self.lastWxError)/dT
-        self.filtqDotErr = .5*self.filtqDotErr + (1-alf)*(pitchRateError-self.lastWyError)/dT
-        self.filtrDotErr = .5*self.filtrDotErr + (1-alf)*(yawRateError-self.lastWzError)/dT
-        self.filtZddotErr = .5*self.filtZddotErr + (1-alf)*(heightRateError-self.lastZdotError)/dT
+        alf = .6
+        self.filtpDotErr = alf*self.filtpDotErr + (1-alf)*(rollRateError-self.lastWxError)/dT
+        self.filtqDotErr = alf*self.filtqDotErr + (1-alf)*(pitchRateError-self.lastWyError)/dT
+        self.filtrDotErr = alf*self.filtrDotErr + (1-alf)*(yawRateError-self.lastWzError)/dT
+        self.filtZddotErr = alf*self.filtZddotErr + (1-alf)*(heightRateError-self.lastZdotError)/dT
         # update last rate errors
         self.lastWxError = rollRateError
         self.lastWyError = pitchRateError
@@ -375,27 +377,42 @@ class Controller:
         /4\          /3\
         \_/          \_/
         '''
-        if (refType == 'rpYRt' or refType == 'xyah'):  # Control mixing for roll pitch yawRate throttle commands
+        rollRateCmd = self.gains.roll.Kp*(self.filteredRollCmd - roll)
+        pitchRateCmd = self.gains.pitch.Kp*(self.filteredPitchCmd - pitch)
+      	rollRateError = rollRateCmd - p
+        pitchRateError = pitchRateCmd - q
+        self.rollErrorInt += rollRateError*dT
+        self.pitchErrorInt += pitchRateError*dT
+        RollControl = self.gains.rollRate.Kp*rollRateError + self.gains.rollRate.Ki*self.rollErrorInt + self.gains.rollRate.Kd*self.filtpDotErr
+        PitchControl = self.gains.pitchRate.Kp*pitchRateError + self.gains.pitchRate.Ki*self.pitchErrorInt + self.gains.pitchRate.Kd*self.filtqDotErr
+      	'''
+      	RollControl = self.gains.roll.Kp*rollError + self.gains.roll.Ki*self.rollErrorInt + self.gains.rollRate.Kp*rollRateError + self.gains.rollRate.Kd*self.filtpDotErr
+      	PitchControl = self.gains.pitch.Kp*pitchError + self.gains.pitch.Ki*self.pitchErrorInt + self.gains.pitchRate.Kp*pitchRateError + self.gains.pitchRate.Kd*self.filtqDotErr'''
+      	YawControl = self.gains.yaw.Kp*yawError + self.gains.yaw.Ki*self.yawErrorInt + self.gains.yawRate.Kp*yawRateError + self.gains.yawRate.Ki*self.yawRateErrorInt \
+			+ self.gains.yawRate.Kd*self.filtqDotErr
+	
+        if (refType == 'rpYRt' or refType == 'xyah' or refType == 'rpya'):  # Control mixing for roll pitch yawRate throttle commands
            
            out1 = collective \
-              + (self.gains.roll.Kp*rollError + self.gains.roll.Ki*self.rollErrorInt + self.gains.rollRate.Kp*rollRateError + self.gains.rollRate.Kd*self.filtpDotErr) \
-              + (self.gains.pitch.Kp*pitchError + self.gains.pitch.Ki*self.pitchErrorInt + self.gains.pitchRate.Kp*pitchRateError + self.gains.pitchRate.Kd*self.filtqDotErr)\
-              - (self.gains.yaw.Kp*yawError + self.gains.yaw.Ki*self.yawErrorInt + self.gains.yawRate.Kp*yawRateError + self.gains.yawRate.Ki*self.yawRateErrorInt + self.gains.yawRate.Kd*self.filtqDotErr)     
+              + RollControl \
+              + PitchControl\
+              - YawControl     
 
            out2 = collective  \
-              - (self.gains.roll.Kp*rollError + self.gains.roll.Ki*self.rollErrorInt + self.gains.rollRate.Kp*rollRateError + self.gains.rollRate.Kd*self.filtpDotErr) \
-              + (self.gains.pitch.Kp*pitchError + self.gains.pitch.Ki*self.pitchErrorInt + self.gains.pitchRate.Kp*pitchRateError + self.gains.pitchRate.Kd*self.filtqDotErr)\
-              + (self.gains.yaw.Kp*yawError + self.gains.yaw.Ki*self.yawErrorInt + self.gains.yawRate.Kp*yawRateError + self.gains.yawRate.Ki*self.yawRateErrorInt + self.gains.yawRate.Kd*self.filtqDotErr) 
-
+              - RollControl \
+              + PitchControl\
+              + YawControl 
+   
            out3 = collective  \
-              - (self.gains.roll.Kp*rollError + self.gains.roll.Ki*self.rollErrorInt + self.gains.rollRate.Kp*rollRateError + self.gains.rollRate.Kd*self.filtpDotErr) \
-              - (self.gains.pitch.Kp*pitchError + self.gains.pitch.Ki*self.pitchErrorInt + self.gains.pitchRate.Kp*pitchRateError + self.gains.pitchRate.Kd*self.filtqDotErr)\
-              - (self.gains.yaw.Kp*yawError + self.gains.yaw.Ki*self.yawErrorInt + self.gains.yawRate.Kp*yawRateError + self.gains.yawRate.Ki*self.yawRateErrorInt + self.gains.yawRate.Kd*self.filtqDotErr) 
-
+              - RollControl \
+              - PitchControl\
+              - YawControl  
+  
            out4 = collective  \
-              + (self.gains.roll.Kp*rollError + self.gains.roll.Ki*self.rollErrorInt + self.gains.rollRate.Kp*rollRateError + self.gains.rollRate.Kd*self.filtpDotErr) \
-              - (self.gains.pitch.Kp*pitchError + self.gains.pitch.Ki*self.pitchErrorInt + self.gains.pitchRate.Kp*pitchRateError + self.gains.pitchRate.Kd*self.filtqDotErr)\
-              + (self.gains.yaw.Kp*yawError + self.gains.yaw.Ki*self.yawErrorInt + self.gains.yawRate.Kp*yawRateError + self.gains.yawRate.Ki*self.yawRateErrorInt + self.gains.yawRate.Kd*self.filtqDotErr) 
+              + RollControl \
+              - PitchControl\
+              + YawControl
+
         elif (refType == 'cut'):
            out1 = 0
            out2 = 0
@@ -407,56 +424,56 @@ class Controller:
            self.HtCmdFilter.reset()  
         else: # Control mixing for other modes
 
-           out1 = trimThrottle + self.gains.alt.Kp*heightError + self.gains.alt.Ki*self.heightErrorInt + self.gains.alt.Kd*heightRateError  \
-              + (self.gains.roll.Kp*rollError + self.gains.roll.Ki*self.rollErrorInt + self.gains.rollRate.Kp*rollRateError + self.gains.rollRate.Kd*self.filtpDotErr) \
-              + (self.gains.pitch.Kp*pitchError + self.gains.pitch.Ki*self.pitchErrorInt + self.gains.pitchRate.Kp*pitchRateError + self.gains.pitchRate.Kd*self.filtqDotErr)\
-              - (self.gains.yaw.Kp*yawError + self.gains.yaw.Ki*self.yawErrorInt + self.gains.yawRate.Kp*yawRateError + self.gains.yawRate.Ki*self.yawRateErrorInt\
-                  + self.gains.yawRate.Kd*self.filtqDotErr)     
+          out1 = trimThrottle + self.gains.alt.Kp*heightError + self.gains.alt.Ki*self.heightErrorInt + self.gains.alt.Kd*heightRateError  \
+              + RollControl \
+              + PitchControl\
+              - YawControl     
 
-           out2 = trimThrottle + self.gains.alt.Kp*heightError + self.gains.alt.Ki*self.heightErrorInt + self.gains.alt.Kd*heightRateError  \
-              - (self.gains.roll.Kp*rollError + self.gains.roll.Ki*self.rollErrorInt + self.gains.rollRate.Kp*rollRateError + self.gains.rollRate.Kd*self.filtpDotErr) \
-              + (self.gains.pitch.Kp*pitchError + self.gains.pitch.Ki*self.pitchErrorInt + self.gains.pitchRate.Kp*pitchRateError + self.gains.pitchRate.Kd*self.filtqDotErr)\
-              + (self.gains.yaw.Kp*yawError + self.gains.yaw.Ki*self.yawErrorInt + self.gains.yawRate.Kp*yawRateError + self.gains.yawRate.Ki*self.yawRateErrorInt\
-                  + self.gains.yawRate.Kd*self.filtqDotErr) 
+          out2 = trimThrottle + self.gains.alt.Kp*heightError + self.gains.alt.Ki*self.heightErrorInt + self.gains.alt.Kd*heightRateError  \
+              - RollControl \
+              + PitchControl\
+              + YawControl 
 
-           out3 = trimThrottle + self.gains.alt.Kp*heightError + self.gains.alt.Ki*self.heightErrorInt + self.gains.alt.Kd*heightRateError  \
-              - (self.gains.roll.Kp*rollError + self.gains.roll.Ki*self.rollErrorInt + self.gains.rollRate.Kp*rollRateError + self.gains.rollRate.Kd*self.filtpDotErr) \
-              - (self.gains.pitch.Kp*pitchError + self.gains.pitch.Ki*self.pitchErrorInt + self.gains.pitchRate.Kp*pitchRateError + self.gains.pitchRate.Kd*self.filtqDotErr)\
-              - (self.gains.yaw.Kp*yawError + self.gains.yaw.Ki*self.yawErrorInt + self.gains.yawRate.Kp*yawRateError + self.gains.yawRate.Ki*self.yawRateErrorInt\
-                  + self.gains.yawRate.Kd*self.filtqDotErr) 
+          out3 = trimThrottle + self.gains.alt.Kp*heightError + self.gains.alt.Ki*self.heightErrorInt + self.gains.alt.Kd*heightRateError  \
+              - RollControl \
+              - PitchControl\
+              - YawControl  
 
-           out4 = trimThrottle + self.gains.alt.Kp*heightError + self.gains.alt.Ki*self.heightErrorInt + self.gains.alt.Kd*heightRateError  \
-              + (self.gains.roll.Kp*rollError + self.gains.roll.Ki*self.rollErrorInt + self.gains.rollRate.Kp*rollRateError + self.gains.rollRate.Kd*self.filtpDotErr) \
-              - (self.gains.pitch.Kp*pitchError + self.gains.pitch.Ki*self.pitchErrorInt + self.gains.pitchRate.Kp*pitchRateError + self.gains.pitchRate.Kd*self.filtqDotErr)\
-              + (self.gains.yaw.Kp*yawError + self.gains.yaw.Ki*self.yawErrorInt + self.gains.yawRate.Kp*yawRateError + self.gains.yawRate.Ki*self.yawRateErrorInt\
-                  + self.gains.yawRate.Kd*self.filtqDotErr) 
-        
-        # Saturate outputs (this is dumb way to do it, but works if you're not maneuvering like crazytown. A better, but more involved way to do this is
-        # by prioritizing pitch and roll authority over yaw and collective, essentially preserving the differences between the four outputs, making them all higher or lower
-        # in order to keep them from saturating. I do this in my Arduino code, which I've included in the comments below, but haven't implemented in python. -Marcus
-        if (out1 > 1):
-           out1 = 1
-        elif (out1 < 0):
-           out1 = 0
+          out4 = trimThrottle + self.gains.alt.Kp*heightError + self.gains.alt.Ki*self.heightErrorInt + self.gains.alt.Kd*heightRateError  \
+              + RollControl \
+              - PitchControl\
+              + YawControl
 
-        if (out2 > 1):
-           out2 = 1
-        elif (out2 < 0):
-           out2 = 0
+        outs = [out1, out2, out3, out4]
+        maxOut = 0.
+        minOut = 1.
+        MAX_THRO = .95
+        MIN_THRO = 0.
+        for out in outs:
+	        if (out > maxOut):
+		        maxOut = out
+	        elif (out < minOut):
+		        minOut = out;
 
-        if (out3 > 1):
-           out3 = 1
-        elif (out3 < 0):
-           out3 = 0
-
-        if (out4 > 1):
-           out4 = 1
-        elif (out4 < 0):
-           out4 = 0
-
+        if (minOut < MIN_THRO or maxOut > MAX_THRO):
+          # undo integration then saturate
+          self.rollErrorInt -= rollRateError*dT
+          self.pitchErrorInt -= pitchRateError*dT
+          if (minOut < MIN_THRO and maxOut > MAX_THRO):
+            print "BOTH SAT"
+            for out in outs:
+              out = (out - minOut)*(MAX_THRO-MIN_THRO)/(maxOut - minOut) + MIN_THRO
+          elif (minOut < MIN_THRO): # low cap
+            print "LOW  SAT"
+            for out in outs:
+              out = out + (MIN_THRO - minOut)
+          else: #hi cap
+            print "HIGH SAT"
+            for out in outs: 
+              out = out - (maxOut - MAX_THRO)
         #print ' output: ',np.array([out1,out2,out3,out4])
         #print 'filteredYawCommand: ', self.filteredYawCmd
-        return np.array([out1,out2,out3,out4])
+        return np.array(outs)
 
 
 
