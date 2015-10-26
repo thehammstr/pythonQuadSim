@@ -27,7 +27,7 @@ yaw = 0
 height = 0;
 position = np.zeros((3,1))
 attitude = [0,0,0]
-attEst = [0,0,0]
+attEst = [0,70,90]
 cameraMode = 'CHASE_CAM'
 refType = 'xyah'
 yawCmd = 0.
@@ -40,7 +40,7 @@ gpsGood = True
 ###################################
 Quad = Multirotor.Multirotor(fuselageMass = 0.5) # default is quadrotor
 idx = 0
-dt = 0.002
+dt = 0.005
 T = 1.3
 numsteps = 3
 maxInd = int(math.ceil(T/dt))
@@ -308,7 +308,7 @@ def runDynamics():
     state,acc = Quad.updateState(dt,commands,windVelocity = wind,disturbance = disturbance)
     # simulate measurements
     accMeas = acc + 1.*np.array([np.random.randn(3)]).T + np.array([[.0],[.0],[.0]]) 
-    gyroMeas = state.T[10:] + .1*np.array([np.random.randn(3)]).T + np.array([[1.0],[0],[.1]]) #+ np.array
+    gyroMeas = state.T[10:] + .1*np.array([np.random.randn(3)]).T + np.array([[0.0],[0],[0.]]) #+ np.array
     # set it askew
     accMeas = np.dot(AQ.Quaternion([0,0,0]).asRotMat,accMeas)
     gyroMeas = np.dot(AQ.Quaternion([0,0,0]).asRotMat,gyroMeas)
