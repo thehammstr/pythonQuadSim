@@ -406,6 +406,7 @@ class MEKF:
         vHat = np.array([[vx,vy,vz]]).T + dT*acc_net
         # quaternion state update
         bias = np.array([[bx,by,bz]]).T
+        print bias.T
         gibbsHat = (gyroMeas-bias)*dT
         # Pack it up  
         self.state = np.vstack((xHat,vHat,gibbsHat,accBias,bias))
@@ -423,7 +424,7 @@ class MEKF:
         Fcont = self._buildFmat(dT,accMeas,gyroMeas,bias)
         Gcont = self._buildGmat(dT)
         Fdisc = np.eye(15) + dT*Fcont
-        sensorNoise = np.diag([.01,.01,.01, .0001, .0001, .0001, .01,.01,.01,.0001,.0001, .0001])
+        sensorNoise = np.diag([.1,.1,.1, .0001, .0001, .0001, .1,.1,.1,.0001,.0001, .0001])
         GQGT = np.dot(Gcont, np.dot(sensorNoise,Gcont.T))
         Qdisc = np.eye(15) + dT * np.dot(Fdisc, np.dot(GQGT,Fdisc.T) )
         self.cov = np.dot(Fdisc,np.dot(self.cov,Fdisc.T)) + Qdisc
@@ -465,6 +466,7 @@ class MEKF:
 
     def _updateStep(self,Measurements):
       # handle update
+      attEst = quatFromRotVec(self.state[6:9])*self.q
       for meas in Measurements:
         if (meas[0] == 'gps'):
           z = meas[1]
@@ -474,6 +476,28 @@ class MEKF:
           self.state = self.state + np.dot(K, z - self.state[0:3,0:1])
           self.cov = np.dot(np.eye(15) - np.dot(K,H), self.cov)
           #print np.diag(self.cov)
+        if (meas[0] == 'baro'):
+          z = meas[1]
+          H = np.array([[0, 0, 1, 0,0,0,0,0,0,0,0,0,0,0,0]])
+          shur = np.linalg.inv( np.dot(H, np.dot(self.cov,H.T)) + meas[2] )
+          K = np.dot( np.dot(self.cov,H.T) , shur )
+          self.state = self.state + np.dot(K, z - np.dot(H,self.state))
+          self.cov = np.dot(np.eye(15) - np.dot(K,H), self.cov)
+        if (meas[0] == 'mag'):
+          z = meas[1]
+          z = (1./np.linalg.norm(z))*z
+          magWorld = meas[3]
+          magWorld = (1./np.linalg.norm(magWorld))*magWorld
+          expectedMag = np.dot(attEst.asRotMat,magWorld)
+          err = z - expectedMag
+          # TODO: check this math
+          H = np.hstack(( np.zeros((3,6)), +crossMat(z), np.zeros((3,6)) ) )
+          Qmeas = meas[2]
+          shur = np.linalg.inv( np.dot(H, np.dot(self.cov,H.T)) + Qmeas)
+          K = np.dot( np.dot(self.cov,H.T) , shur )
+          self.state = self.state + np.dot(K, err)
+          self.cov = np.dot(np.eye(15) - np.dot(K,H), self.cov)
+          
       
 
 

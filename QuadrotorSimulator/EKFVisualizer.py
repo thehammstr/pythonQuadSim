@@ -33,6 +33,7 @@ refType = 'xyah'
 yawCmd = 0.
 zCmd = 10.
 cutMotors = True
+gpsGood = True
 ###################################
 # Create Quadrotor object
 # and initialize sim stuff
@@ -56,6 +57,8 @@ reference = [0.,0.,5.,0.]
 time = 0.
 lastTime = 0.
 lastGPS = 0.
+lastMAG = 0.
+MAG_FREQ = 80.
 startTime = clock.time()
 period = dt
 Quad.stateVector[0,2] = 0. # initial height
@@ -284,6 +287,10 @@ def runDynamics():
     global yawCmd
     global lastTime
     global lastGPS
+    global gpsGood
+    global lastMAG
+    global MAG_FREQ
+    
     # timing stuff
     Time = clock.time()
     dT = Time - runDynamics.lastTime
@@ -300,20 +307,28 @@ def runDynamics():
 
     state,acc = Quad.updateState(dt,commands,windVelocity = wind,disturbance = disturbance)
     # simulate measurements
-    accMeas = acc + .01*np.array([np.random.randn(3)]).T + np.array([[.0],[.0],[1]]) 
-    gyroMeas = state.T[10:] + .1*np.array([np.random.randn(3)]).T + np.array([[0.10],[0],[.3]]) #+ np.array
+    accMeas = acc + 1.*np.array([np.random.randn(3)]).T + np.array([[.0],[.0],[.0]]) 
+    gyroMeas = state.T[10:] + .1*np.array([np.random.randn(3)]).T + np.array([[1.0],[0],[.1]]) #+ np.array
+    # set it askew
+    accMeas = np.dot(AQ.Quaternion([0,0,0]).asRotMat,accMeas)
+    gyroMeas = np.dot(AQ.Quaternion([0,0,0]).asRotMat,gyroMeas)
+
     attTrue = AQ.Quaternion(state[0,6:10])
     earthMagReading = np.array([[.48407,.12519,.8660254]]).T
     #earthMagReading = np.array([[2., 0., 10. ]]).T
     earthMagReading = 1./np.linalg.norm(earthMagReading)*earthMagReading
-    magMeas = np.dot(attTrue.asRotMat,earthMagReading) + .1*np.array([np.random.randn(3)]).T
+    magMeas = np.dot(attTrue.asRotMat,earthMagReading) + .01*np.array([np.random.randn(3)]).T
+    magCov = np.eye(3)
     otherMeas = []
-    otherMeas.append(['mag',magMeas,earthMagReading])
-    # gps update?
-    if (Time - lastGPS > 0.2):
-      gpsMeas = state[0:1,0:3].T
+        # gps update?
+    if (Time - lastMAG >= 1./MAG_FREQ):
+      otherMeas.append(['mag',magMeas,magCov,earthMagReading])
+      lastMAG = Time
+    if (Time - lastGPS >= 0.2):
+      gpsMeas = state[0:1,0:3].T + .001*np.array([np.random.randn(3)]).T + np.array([[.0],[.0],[.0]])
       #print gpsMeas
-      otherMeas.append(['gps',gpsMeas,np.diag([3,3,50])])
+      if (gpsGood):
+        otherMeas.append(['gps',gpsMeas,np.diag([10,10,50])])
       otherMeas.append(['baro',state[0:1,2:3],np.array([[1]]) ])
       lastGPS = Time
     # run attitude filter
@@ -519,6 +534,7 @@ def keyboardHandler(key,x,y):
     global reference
     global refType
     global cutMotors
+    global gpsGood
     speed = 15.
     if (key == 'c'):
        cameraMode = 'CHASE_CAM'
@@ -537,6 +553,11 @@ def keyboardHandler(key,x,y):
        reference = [0., 0., zCmd, 0.]
        yawCmd = 0.
        refType = 'xyah'
+    if (key == 'G'):
+       if (gpsGood):
+         gpsGood = False
+       else:
+         gpsGood = True
     if (key == 'L'):
        zCmd = 5.
        reference = [position[0,0], position[1,0], 0., yawCmd]
