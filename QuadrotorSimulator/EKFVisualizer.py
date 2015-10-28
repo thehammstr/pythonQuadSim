@@ -27,7 +27,7 @@ yaw = 0
 height = 0;
 position = np.zeros((3,1))
 attitude = [0,0,0]
-attEst = [0,70,90]
+attEst = [0,70,170]
 cameraMode = 'CHASE_CAM'
 refType = 'xyah'
 yawCmd = 0.
@@ -40,7 +40,7 @@ gpsGood = True
 ###################################
 Quad = Multirotor.Multirotor(fuselageMass = 0.5) # default is quadrotor
 idx = 0
-dt = 0.005
+dt = 0.002
 T = 1.3
 numsteps = 3
 maxInd = int(math.ceil(T/dt))
@@ -258,7 +258,7 @@ def drawEnvironment():
     # ground grid
     glBegin(GL_LINES)
     gridSize = 1000
-    step = 5
+    step = 15
     for ii in range(-gridSize,gridSize+step,step):
        glVertex3i(gridSize,ii,0)
        glVertex3i(-gridSize,ii,0)
@@ -297,18 +297,20 @@ def runDynamics():
     wind = windvel # + 10*np.random.randn(3,1)
     if (dT < period):
         return
-    if ( Time - lastTime > 1. ):
-       print dT
-       lastTime = Time
+
     # else update state
     disturbance = 10
     if (Time - startTime > 2 and Time - startTime < 10):
         pass #wind = np.array([[10,0,0]]).T
 
     state,acc = Quad.updateState(dt,commands,windVelocity = wind,disturbance = disturbance)
+
+    if ( Time - lastTime > 1. ):
+      print dT, 'x y ht: ', state[0,0], ' ', state[0,1], ' ', state[0,2]
+      lastTime = Time
     # simulate measurements
-    accMeas = acc + 1.*np.array([np.random.randn(3)]).T + np.array([[.0],[.0],[.0]]) 
-    gyroMeas = state.T[10:] + .1*np.array([np.random.randn(3)]).T + np.array([[0.0],[0],[0.]]) #+ np.array
+    accMeas = acc + 1.*np.array([np.random.randn(3)]).T + np.array([[.0],[1.0],[2.]]) 
+    gyroMeas = state.T[10:] + .1*np.array([np.random.randn(3)]).T + np.array([[0.],[0],[.1]]) #+ np.array
     # set it askew
     accMeas = np.dot(AQ.Quaternion([0,0,0]).asRotMat,accMeas)
     gyroMeas = np.dot(AQ.Quaternion([0,0,0]).asRotMat,gyroMeas)
@@ -318,17 +320,18 @@ def runDynamics():
     #earthMagReading = np.array([[2., 0., 10. ]]).T
     earthMagReading = 1./np.linalg.norm(earthMagReading)*earthMagReading
     magMeas = np.dot(attTrue.asRotMat,earthMagReading) + .01*np.array([np.random.randn(3)]).T
-    magCov = np.eye(3)
+    magCov = .1*np.eye(3)
     otherMeas = []
         # gps update?
     if (Time - lastMAG >= 1./MAG_FREQ):
       otherMeas.append(['mag',magMeas,magCov,earthMagReading])
       lastMAG = Time
     if (Time - lastGPS >= 0.2):
-      gpsMeas = state[0:1,0:3].T + .001*np.array([np.random.randn(3)]).T + np.array([[.0],[.0],[.0]])
+      velWorld = np.dot(attTrue.asRotMat.T,state[0:1,3:6].T)
+      gpsMeas = np.vstack((state[0:1,0:3].T,velWorld)) + .001*np.array([np.random.randn(6)]).T + np.array([[.0],[.0],[.0],[.0],[.0],[.0]])
       #print gpsMeas
       if (gpsGood):
-        otherMeas.append(['gps',gpsMeas,np.diag([10,10,50])])
+        otherMeas.append(['gps',gpsMeas,np.diag([3,3,50,3,3,10])])
       otherMeas.append(['baro',state[0:1,2:3],np.array([[1]]) ])
       lastGPS = Time
     # run attitude filter
@@ -341,6 +344,9 @@ def runDynamics():
     controlState[0,7] = qy
     controlState[0,8] = qz
     controlState[0,9] = qw
+    controlState[0,0] = EKF.state[0,0]
+    controlState[0,1] = EKF.state[1,0]
+    controlState[0,2] = EKF.state[2,0]
     #if (Time - startTime > 5 and Time - startTime <= 12.):
     #    reference = [5,2,4,0]
     '''if (Time - startTime > 12):
@@ -405,7 +411,7 @@ def main():
     glutMotionFunc(dragFunc)
     glutMouseFunc(mouseFunc)
     glMatrixMode(GL_PROJECTION)
-    gluPerspective(40.,1.,1.,100.)
+    gluPerspective(40.,1.,1.,1000.)
     glMatrixMode(GL_MODELVIEW)
     '''gluLookAt(position[0,0]-30,position[1,0]-0,position[2,0] -20,
               position[0,0],position[1,0],position[2,0],	

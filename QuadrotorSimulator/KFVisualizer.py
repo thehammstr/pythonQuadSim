@@ -62,7 +62,7 @@ Quad.stateVector[0,2] = 0. # initial height
 Quad.stateVector[0,6:10] = AQ.Quaternion(np.array([0,0,0])).q
 #np.random.seed([])
 accMeas = np.zeros((3,1))
-
+gpsGood = True
 
   
 
@@ -284,6 +284,7 @@ def runDynamics():
     global yawCmd
     global lastTime
     global lastGPS
+    global gpsGood
     # timing stuff
     Time = clock.time()
     dT = Time - runDynamics.lastTime
@@ -300,20 +301,21 @@ def runDynamics():
 
     state,acc = Quad.updateState(dt,commands,windVelocity = wind,disturbance = disturbance)
     # simulate measurements
-    accMeas = acc + .01*np.array([np.random.randn(3)]).T + np.array([[.0],[0],[0]]) 
-    gyroMeas = state.T[10:] + .1*np.array([np.random.randn(3)]).T + np.array([[0.00],[0],[.00]]) #+ np.array
+    accMeas = acc + .1*np.array([np.random.randn(3)]).T + np.array([[.0],[0],[.0]]) 
+    gyroMeas = state.T[10:] + .01*np.array([np.random.randn(3)]).T + np.array([[0.0],[.0],[.00]]) #+ np.array
     attTrue = AQ.Quaternion(state[0,6:10])
     earthMagReading = np.array([[.48407,.12519,.8660254]]).T
     #earthMagReading = np.array([[2., 0., 10. ]]).T
     earthMagReading = 1./np.linalg.norm(earthMagReading)*earthMagReading
     magMeas = np.dot(attTrue.asRotMat,earthMagReading) + .1*np.array([np.random.randn(3)]).T
     otherMeas = []
-    otherMeas.append(['mag',magMeas,earthMagReading])
+    #otherMeas.append(['mag',magMeas,earthMagReading])
     # gps update?
     if (Time - lastGPS > 0.2):
       gpsMeas = state[0:1,0:3].T
       #print gpsMeas
-      otherMeas.append(['gps',gpsMeas,1*np.diag([1,1,10])])
+      if (gpsGood):
+        otherMeas.append(['gps',gpsMeas,.01*np.diag([1,1,10])])
       lastGPS = Time
     # run attitude filter
     attitudeAndGyroBias = AttEstimator.runFilter(accMeas,gyroMeas,otherMeas,dt)
@@ -516,6 +518,7 @@ def keyboardHandler(key,x,y):
     global reference
     global refType
     global cutMotors
+    global gpsGood
     speed = 15.
     if (key == 'c'):
        cameraMode = 'CHASE_CAM'
@@ -534,6 +537,11 @@ def keyboardHandler(key,x,y):
        reference = [0., 0., zCmd, 0.]
        yawCmd = 0.
        refType = 'xyah'
+    if (key == 'G'):
+       if (gpsGood):
+         gpsGood = False
+       else:
+         gpsGood = True
     if (key == 'L'):
        zCmd = 5.
        reference = [position[0,0], position[1,0], 0., yawCmd]

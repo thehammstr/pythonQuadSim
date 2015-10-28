@@ -192,7 +192,7 @@ class Controller:
         attitude = AQ.Quaternion(np.array([qx,qy,qz,qw])) 
         worldVel = np.dot(attitude.asRotMat.T,np.array([[u],[v],[w]]))
         roll,pitch,yaw = np.pi/180*attitude.asEuler # convert to rad
-        MAX_ANGLE = 50.*np.pi/180
+        MAX_ANGLE = 30.*np.pi/180
         MAX_VEL = 9.
         MAX_VEL_Z = 3.
         MAX_YR = 1.

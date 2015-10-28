@@ -210,7 +210,6 @@ class KF:
 
     def _updateStep(self,Measurements):
       # handle update
-      att = AQ.Quaternion(self.state[6:10,0].T)
       for meas in Measurements:
         if (meas[0] == 'gps'):
           z = meas[1]
@@ -394,7 +393,7 @@ class MEKF:
         # Rotate accel into world
         accBias = np.array([[abx,aby,abz]]).T
         acc_world = np.dot(att.asRotMat.T,accMeas-accBias)
-        #print "acc_w: ",acc_world.T, qx, qy, qz, qw, abx,aby,abz
+        print "accBias_w: ",accBias.T, "gyroBias: ",np.array([[bx,by,bz]]).T
         # subtract gravity
         acc_net = acc_world - np.array([[0,0,-9.81]]).T
         ##
@@ -406,7 +405,6 @@ class MEKF:
         vHat = np.array([[vx,vy,vz]]).T + dT*acc_net
         # quaternion state update
         bias = np.array([[bx,by,bz]]).T
-        print bias.T
         gibbsHat = (gyroMeas-bias)*dT
         # Pack it up  
         self.state = np.vstack((xHat,vHat,gibbsHat,accBias,bias))
@@ -414,7 +412,6 @@ class MEKF:
         # Now do covariance
         # Build "A matrix"
         #
-        # TODO: Check transposes!!!
         #
         # Build F matrix
         self.propagateCovariance(dT,accMeas,gyroMeas,bias)
@@ -424,18 +421,20 @@ class MEKF:
         Fcont = self._buildFmat(dT,accMeas,gyroMeas,bias)
         Gcont = self._buildGmat(dT)
         Fdisc = np.eye(15) + dT*Fcont
-        sensorNoise = np.diag([.1,.1,.1, .0001, .0001, .0001, .1,.1,.1,.0001,.0001, .0001])
+        # sensor noise: [ gyro gyroBias accel accelBias ]
+        sensorNoise = np.diag([1.,1.,1., .00001, .00001, .00001, 1.,1.,1.,.00001,.00001, .00001])
         GQGT = np.dot(Gcont, np.dot(sensorNoise,Gcont.T))
-        Qdisc = np.eye(15) + dT * np.dot(Fdisc, np.dot(GQGT,Fdisc.T) )
+        Qdisc = dT*GQGT
         self.cov = np.dot(Fdisc,np.dot(self.cov,Fdisc.T)) + Qdisc
 
     # build linearized state transition matrix for covariance propagation
     def _buildFmat(self,dT,acc,gyroMeas,bias):
         # build continuous time model
-        dfGibbs_dGibbs = -crossMat(gyroMeas - bias)
+        dfGibbs_dGibbs = -crossMat(gyroMeas)
         dfGibbs_dBias = -np.eye(3)
         att = quatFromRotVec(self.state[6:9])*self.q
-        dfVel_dGibbs = np.dot(-att.asRotMat.T,crossMat(acc- self.state[9:12]))
+        #dfVel_dGibbs = np.dot(-att.asRotMat.T,crossMat(acc- self.state[9:12]))
+        dfVel_dGibbs = np.dot(-att.asRotMat.T,crossMat(acc))
         dfVel_daBias = -att.asRotMat.T
         Row1 = np.hstack( (np.zeros((3,3)), np.eye(3), np.zeros((3,9)) ))
         Row2 = np.hstack( (np.zeros((3,6)), dfVel_dGibbs, dfVel_daBias, np.zeros((3,3))) )
@@ -470,10 +469,10 @@ class MEKF:
       for meas in Measurements:
         if (meas[0] == 'gps'):
           z = meas[1]
-          H = np.hstack( (np.eye(3), np.zeros((3,12)) ) )
+          H = np.hstack( (np.eye(6), np.zeros((6,9)) ) )
           shur = np.linalg.inv( np.dot(H, np.dot(self.cov,H.T)) + meas[2] )
           K = np.dot( np.dot(self.cov,H.T) , shur )
-          self.state = self.state + np.dot(K, z - self.state[0:3,0:1])
+          self.state = self.state + np.dot(K, z - self.state[0:6,0:1])
           self.cov = np.dot(np.eye(15) - np.dot(K,H), self.cov)
           #print np.diag(self.cov)
         if (meas[0] == 'baro'):
@@ -491,7 +490,7 @@ class MEKF:
           expectedMag = np.dot(attEst.asRotMat,magWorld)
           err = z - expectedMag
           # TODO: check this math
-          H = np.hstack(( np.zeros((3,6)), +crossMat(z), np.zeros((3,6)) ) )
+          H = np.hstack(( np.zeros((3,6)), crossMat(z), np.zeros((3,6)) ) )
           Qmeas = meas[2]
           shur = np.linalg.inv( np.dot(H, np.dot(self.cov,H.T)) + Qmeas)
           K = np.dot( np.dot(self.cov,H.T) , shur )
