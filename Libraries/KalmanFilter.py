@@ -356,7 +356,7 @@ class MEKF:
 
     # constructor
 
-    def __init__(self,initialState = np.array([[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],dtype=np.float64).T,initialCovariance = 1*np.eye(15,dtype=np.float64)):
+    def __init__(self,initialState = np.array([[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],dtype=np.float64).T,initialCovariance = 1000*np.eye(15,dtype=np.float64)):
 
         self.state = initialState
         self.cov = initialCovariance
@@ -424,7 +424,7 @@ class MEKF:
         # sensor noise: [ gyro gyroBias accel accelBias ]
         sensorNoise = np.diag([1.,1.,1., .00001, .00001, .00001, 1.,1.,1.,.00001,.00001, .00001])
         GQGT = np.dot(Gcont, np.dot(sensorNoise,Gcont.T))
-        Qdisc = dT*GQGT
+        Qdisc = dT*dT*GQGT
         self.cov = np.dot(Fdisc,np.dot(self.cov,Fdisc.T)) + Qdisc
 
     # build linearized state transition matrix for covariance propagation
@@ -433,7 +433,6 @@ class MEKF:
         dfGibbs_dGibbs = -crossMat(gyroMeas)
         dfGibbs_dBias = -np.eye(3)
         att = quatFromRotVec(self.state[6:9])*self.q
-        #dfVel_dGibbs = np.dot(-att.asRotMat.T,crossMat(acc- self.state[9:12]))
         dfVel_dGibbs = np.dot(-att.asRotMat.T,crossMat(acc))
         dfVel_daBias = -att.asRotMat.T
         Row1 = np.hstack( (np.zeros((3,3)), np.eye(3), np.zeros((3,9)) ))
@@ -445,12 +444,12 @@ class MEKF:
     def _buildGmat(self,dT):
         # noise assumed to have form v = [gyro noise, gyro bias driver, accel noise, accel bias driver]
         att = quatFromRotVec(self.state[6:9])*self.q
-        dGibbs_dGyroNoise = -np.eye(3)
+        dGibbs_dGyroNoise = np.eye(3)
         dGyroBias_dGyroNoiseDriver = np.eye(3)
-        dVel_dAccNoise = -att.asRotMat.T
+        dVel_dAccNoise = att.asRotMat.T
         dAccBias_dAccNoiseDriver = np.eye(3)
         Row2 = np.hstack( (np.zeros((3,6)), dVel_dAccNoise, np.zeros((3,3)) ) )
-        Row3 = np.hstack( ( -np.eye(3), np.zeros((3,9)) ))
+        Row3 = np.hstack( ( np.eye(3), np.zeros((3,9)) ))
         Row4 = np.hstack( (np.zeros((3,9)), np.eye(3)) )
         Row5 = np.hstack( (np.zeros((3,3)), np.eye(3), np.zeros((3,6)) ) )
         Gcont = np.vstack( (np.zeros((3,12)), Row2, Row3, Row4,Row5 ) )
