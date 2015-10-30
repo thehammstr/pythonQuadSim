@@ -356,12 +356,35 @@ class MEKF:
 
     # constructor
 
-    def __init__(self,initialState = np.array([[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],dtype=np.float64).T,initialCovariance = 1000*np.eye(15,dtype=np.float64)):
+    def __init__(self,initialState = np.array([[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],dtype=np.float32).T,initialCovariance = 100000*np.eye(15,dtype=np.float32),processNoise = np.diag([.1,.1,.1, 1e-5, 1e-5, 1e-5, 1.,1.,1.,1e-5, 1e-5, 1e-5])):
 
         self.state = initialState
         self.cov = initialCovariance
         self.cov[3:6,3:6] = .001*np.eye(3)
         self.q = AQ.Quaternion([0,0,0])
+        self.processNoise = processNoise
+        self.initialized = False
+        self.initializationCounter = 100
+        self.firstGPS = False
+
+    def warmStart(self,acc,gyro,OtherMeas,dT):
+        # accumulate measurements without touching covariance
+        for meas in OtherMeas:
+          if (meas[0] == 'gps'):
+            self.firstGPS = True
+        if (self.initializationCounter > 0):
+          self.initializationCounter -= 1
+          OtherMeas.append(['acc',acc,.1*self.processNoise[6:9,6:9]])
+          # Assume you're not moving fast at initialization 
+          OtherMeas.append(['vel',np.zeros((3,1)),.1*np.eye(3)])
+          #self._predictStep(acc,gyro,dT)
+          self._updateStep(OtherMeas)
+          # Don't estimate biases yet 
+          #self.state[9:15] = np.zeros((6,1))
+          self._resetQuat()
+        else:
+          self.initialized = True
+          self.firstGPS = True
 
     def runFilter(self,accMeas,gyroMeas,otherMeas,dT):
         '''
@@ -375,17 +398,27 @@ class MEKF:
                otherMeas = [['gps', [3x1 np array], [3x3 covariance]], ['barometer', height, sigmasquared ]
         '''
         # integrate EOMs to get predicted mean and covariance
-        self._predictStep(accMeas,gyroMeas,dT)
-        # update with other measurements
-        #if (len(otherMeas) > 0):
-        self._updateStep(otherMeas)
-        # push gibbs vector onto quat
-        self._resetQuat()
-        # all done 
+        if (self.initialized):
+          self._predictStep(accMeas,gyroMeas,dT)
+          # update with other measurements
+          #if (len(otherMeas) > 0):
+          otherMeas.append(['acc',accMeas,10*self.processNoise[6:9,6:9]])
+          self._updateStep(otherMeas)
+          # push gibbs vector onto quat
+          self._resetQuat()
+          # all done 
+        else:
+          self.warmStart(accMeas,gyroMeas,otherMeas,dT)
+          print "INITIALIZING MEKF!"
         return [self.state, self.cov]
 
 
     def _predictStep(self,accMeas,gyroMeas,dT):
+        #
+        self.propagateState(accMeas,gyroMeas,dT)
+        self.propagateCovariance(dT,accMeas,gyroMeas)
+
+    def propagateState(self,accMeas,gyroMeas,dT):
         # unpack
         x,y,z,vx,vy,vz,gbx,gby,gbz,abx,aby,abz,bx,by,bz = self.state.T[0]
         # repack
@@ -393,14 +426,15 @@ class MEKF:
         # Rotate accel into world
         accBias = np.array([[abx,aby,abz]]).T
         acc_world = np.dot(att.asRotMat.T,accMeas-accBias)
-        print "accBias_w: ",accBias.T, "gyroBias: ",np.array([[bx,by,bz]]).T
+        print "accBias_w: ",accBias.T, "gyroBias: ",np.array([[bx,by,bz]])
         # subtract gravity
         acc_net = acc_world - np.array([[0,0,-9.81]]).T
         ##
         #  Perform state updates
         ##
         # pos update
-        xHat = np.array([[x,y,z]]).T + dT*np.array([[vx,vy,vz]]).T
+        xHat = np.array([[x,y,z]]).T + dT*np.array([[vx,vy,vz]]).T #+ .5*dT*dT*acc_net
+
         # vel update
         vHat = np.array([[vx,vy,vz]]).T + dT*acc_net
         # quaternion state update
@@ -408,21 +442,18 @@ class MEKF:
         gibbsHat = (gyroMeas-bias)*dT
         # Pack it up  
         self.state = np.vstack((xHat,vHat,gibbsHat,accBias,bias))
-        #
-        # Now do covariance
-        # Build "A matrix"
-        #
-        #
-        # Build F matrix
-        self.propagateCovariance(dT,accMeas,gyroMeas,bias)
 
 
-    def propagateCovariance(self,dT,accMeas,gyroMeas,bias):
+    def propagateCovariance(self,dT,accMeas,gyroMeas):
+        bias = self.state[12:15]
         Fcont = self._buildFmat(dT,accMeas,gyroMeas,bias)
         Gcont = self._buildGmat(dT)
         Fdisc = np.eye(15) + dT*Fcont
         # sensor noise: [ gyro gyroBias accel accelBias ]
-        sensorNoise = np.diag([1.,1.,1., .00001, .00001, .00001, 1.,1.,1.,.00001,.00001, .00001])
+        if (self.initialized):
+          sensorNoise = self.processNoise
+        else:
+          sensorNoise = 1*self.processNoise
         GQGT = np.dot(Gcont, np.dot(sensorNoise,Gcont.T))
         Qdisc = dT*dT*GQGT
         self.cov = np.dot(Fdisc,np.dot(self.cov,Fdisc.T)) + Qdisc
@@ -460,7 +491,9 @@ class MEKF:
         self.q = dq*self.q
         self.state[6:9] = np.zeros((3,1))
 
-
+    def updateCovariance(self,K,H):
+      if (self.initialized):
+        self.cov = np.dot(np.eye(15) - np.dot(K,H), self.cov)
 
     def _updateStep(self,Measurements):
       # handle update
@@ -472,7 +505,7 @@ class MEKF:
           shur = np.linalg.inv( np.dot(H, np.dot(self.cov,H.T)) + meas[2] )
           K = np.dot( np.dot(self.cov,H.T) , shur )
           self.state = self.state + np.dot(K, z - self.state[0:6,0:1])
-          self.cov = np.dot(np.eye(15) - np.dot(K,H), self.cov)
+          self.updateCovariance(K,H)
           #print np.diag(self.cov)
         if (meas[0] == 'baro'):
           z = meas[1]
@@ -480,22 +513,47 @@ class MEKF:
           shur = np.linalg.inv( np.dot(H, np.dot(self.cov,H.T)) + meas[2] )
           K = np.dot( np.dot(self.cov,H.T) , shur )
           self.state = self.state + np.dot(K, z - np.dot(H,self.state))
-          self.cov = np.dot(np.eye(15) - np.dot(K,H), self.cov)
+          self.updateCovariance(K,H)
         if (meas[0] == 'mag'):
           z = meas[1]
-          z = (1./np.linalg.norm(z))*z
+          #z_world = np.dot(attEst.asRotMat.T,z)
+          #z_world[2,0] = 0
+          #z_world = (1./np.linalg.norm(z))*z_world
+          #z = np.dot(attEst.asRotMat,z_world)
           magWorld = meas[3]
+          #magWorld[2,0] = 0
           magWorld = (1./np.linalg.norm(magWorld))*magWorld
           expectedMag = np.dot(attEst.asRotMat,magWorld)
           err = z - expectedMag
+          print "mag err: ",err.T
           # TODO: check this math
           H = np.hstack(( np.zeros((3,6)), crossMat(z), np.zeros((3,6)) ) )
           Qmeas = meas[2]
           shur = np.linalg.inv( np.dot(H, np.dot(self.cov,H.T)) + Qmeas)
           K = np.dot( np.dot(self.cov,H.T) , shur )
           self.state = self.state + np.dot(K, err)
-          self.cov = np.dot(np.eye(15) - np.dot(K,H), self.cov)
-          
+          self.updateCovariance(K,H)
+        if (meas[0] == 'acc'):
+          z = meas[1] - self.state[9:12]
+          z = (1./(np.linalg.norm(z)+1E-13))*z
+          gravWorldUnit = np.array([[0,0,-1]]).T
+          gravBodyUnit = np.dot(attEst.asRotMat,gravWorldUnit)
+          err = z - gravBodyUnit
+          print 'tilt err: ',err.T
+          H = np.hstack( (np.zeros((3,6)), crossMat(z), np.zeros((3,6)) ) )
+          Qmeas = meas[2]
+          shur = np.linalg.inv( np.dot(H, np.dot(self.cov,H.T)) + Qmeas)
+          K = np.dot( np.dot(self.cov,H.T) , shur )
+          self.state = self.state + np.dot(K, err)
+          self.updateCovariance(K,H)
+        if (meas[0] == 'vel'):
+          z = meas[1]
+          H = np.hstack( (np.zeros((3,3)), np.eye(3), np.zeros((3,9)) ) )
+          shur = np.linalg.inv( np.dot(H, np.dot(self.cov,H.T)) + meas[2] )
+          K = np.dot( np.dot(self.cov,H.T) , shur )
+          self.state = self.state + np.dot(K, z - self.state[3:6,0:1])
+          self.updateCovariance(K,H)
+
       
 
 

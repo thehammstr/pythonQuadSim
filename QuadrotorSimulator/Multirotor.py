@@ -41,7 +41,7 @@ class Multirotor:
     stateVector = np.zeros((1,13))
     stateVector[0,9] = 1. # unit quat
     # code overhead
-    lastTime = -.01
+    lastTime = -.01  
 
 # Methods
 

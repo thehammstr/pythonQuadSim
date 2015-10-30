@@ -26,21 +26,27 @@ name = 'Quadrotor Visualizer'
 yaw = 0
 height = 0;
 position = np.zeros((3,1))
-attitude = [0,0,0]
-attEst = [0,70,170]
+attitude = [0,0,30]
+attEst = [0,0,00]
 cameraMode = 'CHASE_CAM'
 refType = 'xyah'
 yawCmd = 0.
 zCmd = 10.
 cutMotors = True
-gpsGood = True
+gpsGood = False
 ###################################
 # Create Quadrotor object
 # and initialize sim stuff
 ###################################
 Quad = Multirotor.Multirotor(fuselageMass = 0.5) # default is quadrotor
+initialAtt = AQ.Quaternion(attitude)
+Quad.stateVector[0,6] = initialAtt.q[0]
+Quad.stateVector[0,7] = initialAtt.q[1]
+Quad.stateVector[0,8] = initialAtt.q[2]
+Quad.stateVector[0,9] = initialAtt.q[3]
 idx = 0
 dt = 0.002
+dtControl = .008
 T = 1.3
 numsteps = 3
 maxInd = int(math.ceil(T/dt))
@@ -51,18 +57,39 @@ commands = [0.5,0.5,0.5,0.5]
 windvel = np.zeros((3,1))
 # run for a whil
 controller = QuadrotorController.Controller()
-EKF = KF.MEKF()
+
+#--------------------------------------
+# Kalman initialization
+#--------------------------------------
+gyroNoise = .1
+gyroBiasNoise = 1e-8
+accelNoise = 1
+accelBiasNoise = 1e-8
+sensorNoise = np.diag([gyroNoise,gyroNoise,gyroNoise,
+                      gyroBiasNoise, gyroBiasNoise, gyroBiasNoise,
+                      accelNoise,accelNoise,accelNoise,
+                      accelBiasNoise, accelBiasNoise, accelBiasNoise])
+initialPos = np.array([[0,10,0]]).T
+initialVel = np.array([[0,0,0]]).T
+initialAtt = AQ.Quaternion(attEst)
+
+initial_state = np.vstack((initialPos,initialVel,np.zeros((9,1))))
+
+EKF = KF.MEKF(initialState = initial_state, processNoise = sensorNoise)
+EKF.q = initialAtt
+
 AttEstimator = KinematicEKF.AttitudeComplementaryFilter(initialAttitude=AQ.Quaternion(np.array(attEst)), timeConstant = 10.,Kbias = .00)
 reference = [0.,0.,5.,0.]
 time = 0.
 lastTime = 0.
 lastGPS = 0.
 lastMAG = 0.
+lastControlTime = 0.
 MAG_FREQ = 80.
 startTime = clock.time()
 period = dt
 Quad.stateVector[0,2] = 0. # initial height
-Quad.stateVector[0,6:10] = AQ.Quaternion(np.array([0,0,0])).q
+Quad.stateVector[0,6:10] = AQ.Quaternion(np.array(attitude)).q
 #np.random.seed([])
 accMeas = np.zeros((3,1))
 
@@ -290,6 +317,8 @@ def runDynamics():
     global gpsGood
     global lastMAG
     global MAG_FREQ
+    global dtControl
+    global lastControlTime
     
     # timing stuff
     Time = clock.time()
@@ -309,34 +338,38 @@ def runDynamics():
       print dT, 'x y ht: ', state[0,0], ' ', state[0,1], ' ', state[0,2]
       lastTime = Time
     # simulate measurements
-    accMeas = acc + 1.*np.array([np.random.randn(3)]).T + np.array([[.0],[1.0],[2.]]) 
-    gyroMeas = state.T[10:] + .1*np.array([np.random.randn(3)]).T + np.array([[0.],[0],[.1]]) #+ np.array
+    accMeas = acc +  0.1*np.array([np.random.randn(3)]).T + np.array([[.0],[.1],[.0]]) 
+    print accMeas
+    gyroMeas = state.T[10:] + .01*np.array([np.random.randn(3)]).T + np.array([[0.],[0],[.01]]) #+ np.array
     # set it askew
     accMeas = np.dot(AQ.Quaternion([0,0,0]).asRotMat,accMeas)
     gyroMeas = np.dot(AQ.Quaternion([0,0,0]).asRotMat,gyroMeas)
 
     attTrue = AQ.Quaternion(state[0,6:10])
-    earthMagReading = np.array([[.48407,.12519,.8660254]]).T
+    #earthMagReading = np.array([[.48407,.12519,.8660254]]).T
+    earthMagReading = np.array([[.48407,.12519,.0]]).T
     #earthMagReading = np.array([[2., 0., 10. ]]).T
     earthMagReading = 1./np.linalg.norm(earthMagReading)*earthMagReading
     magMeas = np.dot(attTrue.asRotMat,earthMagReading) + .01*np.array([np.random.randn(3)]).T
     magCov = .1*np.eye(3)
     otherMeas = []
         # gps update?
-    if (Time - lastMAG >= 1./MAG_FREQ):
+    if (Time - lastControlTime > dtControl and Time - lastMAG >= 1./MAG_FREQ):
       otherMeas.append(['mag',magMeas,magCov,earthMagReading])
       lastMAG = Time
-    if (Time - lastGPS >= 0.2):
+    if (Time - lastControlTime > dtControl and Time - lastGPS >= 0.2):
       velWorld = np.dot(attTrue.asRotMat.T,state[0:1,3:6].T)
-      gpsMeas = np.vstack((state[0:1,0:3].T,velWorld)) + .001*np.array([np.random.randn(6)]).T + np.array([[.0],[.0],[.0],[.0],[.0],[.0]])
+      gpsMeas = np.vstack((state[0:1,0:3].T,velWorld)) + .01*np.array([np.random.randn(6)]).T + np.array([[.0],[.0],[.0],[.0],[.0],[.0]])
       #print gpsMeas
       if (gpsGood):
-        otherMeas.append(['gps',gpsMeas,np.diag([3,3,50,3,3,10])])
+        otherMeas.append(['gps',gpsMeas,np.diag([1,1,50,1,1,10])])
       otherMeas.append(['baro',state[0:1,2:3],np.array([[1]]) ])
       lastGPS = Time
     # run attitude filter
-    attitudeAndGyroBias = AttEstimator.runFilter(accMeas,gyroMeas,otherMeas,dt)
-    stateAndCovariance = EKF.runFilter(accMeas,gyroMeas,otherMeas,dt)
+    if (Time - lastControlTime > dtControl):
+      #attitudeAndGyroBias = AttEstimator.runFilter(accMeas,gyroMeas,otherMeas,dt)
+      stateAndCovariance = EKF.runFilter(accMeas,gyroMeas,otherMeas,dtControl)
+      lastControlTime = Time
     # update control
     controlState = state.copy()
     qx,qy,qz,qw = EKF.q.q
@@ -372,7 +405,7 @@ def runDynamics():
        print 'dT: ',dT
     #print Time - startTimes, 'altitude:', state[0,2]
     attitude = attTrue.asEuler
-    attEst = attitudeAndGyroBias[0].asEuler
+    attEst = EKF.q.asEuler
     position[0,0] = state[0,0]
     position[1,0] = state[0,1]
     position[2,0] = state[0,2]
@@ -441,12 +474,16 @@ def display():
     veh_R_yaw = AQ.Quaternion(np.array([0,0,attitude[2]]))
     chaseCamPos = np.dot(gl_R_ned.asRotMat,np.dot(veh_R_yaw.asRotMat.T,np.array([[-30],[0],[-10]])))
     posGL = np.dot(gl_R_ned.asRotMat,position)
+    posGLest = np.dot(gl_R_ned.asRotMat,positionEst)
     if (cameraMode == 'CHASE_CAM'):
-       '''gluLookAt(position[1]-0,position[0]-30,-position[2]+10,
-              position[1],position[0],-position[2],	
-              0,3,1)'''
+       print posGL.T
        gluLookAt(posGL[0]+chaseCamPos[0],posGL[1]+chaseCamPos[1],posGL[2]+chaseCamPos[2],
                  posGL[0],posGL[1],posGL[2],	
+              0,0,1)
+    elif (cameraMode == 'CHASE_CAM_EST'):
+       print posGLest.T
+       gluLookAt(posGLest[0]+chaseCamPos[0],posGLest[1]+chaseCamPos[1],posGLest[2]+chaseCamPos[2],
+                 posGLest[0],posGLest[1],posGLest[2],	
               0,0,1)
     elif (cameraMode == 'GROUND_CAM'):
        gluLookAt(0,-30,2,
@@ -544,6 +581,8 @@ def keyboardHandler(key,x,y):
     speed = 15.
     if (key == 'c'):
        cameraMode = 'CHASE_CAM'
+    if (key == 'C'):
+       cameraMode = 'CHASE_CAM_EST'
     if (key == 'g'):
        cameraMode = 'GROUND_CAM'
     if (key == 'f'):
