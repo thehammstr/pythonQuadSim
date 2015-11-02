@@ -45,8 +45,8 @@ Quad.stateVector[0,7] = initialAtt.q[1]
 Quad.stateVector[0,8] = initialAtt.q[2]
 Quad.stateVector[0,9] = initialAtt.q[3]
 idx = 0
-dt = 0.002
-dtControl = .008
+dt = 0.005
+dtControl = .01
 T = 1.3
 numsteps = 3
 maxInd = int(math.ceil(T/dt))
@@ -319,6 +319,8 @@ def runDynamics():
     global MAG_FREQ
     global dtControl
     global lastControlTime
+    global gyroNoise
+    global accelNoise
     
     # timing stuff
     Time = clock.time()
@@ -338,9 +340,8 @@ def runDynamics():
       print dT, 'x y ht: ', state[0,0], ' ', state[0,1], ' ', state[0,2]
       lastTime = Time
     # simulate measurements
-    accMeas = acc +  0.1*np.array([np.random.randn(3)]).T + np.array([[.0],[.1],[.0]]) 
-    print accMeas
-    gyroMeas = state.T[10:] + .01*np.array([np.random.randn(3)]).T + np.array([[0.],[0],[.01]]) #+ np.array
+    accMeas = acc +  accelNoise*np.array([np.random.randn(3)]).T + np.array([[.0],[.1],[.0]]) 
+    gyroMeas = state.T[10:] + gyroNoise*np.array([np.random.randn(3)]).T + np.array([[0.],[0],[.01]]) #+ np.array
     # set it askew
     accMeas = np.dot(AQ.Quaternion([0,0,0]).asRotMat,accMeas)
     gyroMeas = np.dot(AQ.Quaternion([0,0,0]).asRotMat,gyroMeas)

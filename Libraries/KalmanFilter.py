@@ -433,7 +433,7 @@ class MEKF:
         #  Perform state updates
         ##
         # pos update
-        xHat = np.array([[x,y,z]]).T + dT*np.array([[vx,vy,vz]]).T #+ .5*dT*dT*acc_net
+        xHat = np.array([[x,y,z]]).T + dT*np.array([[vx,vy,vz]]).T + .5*dT*dT*acc_net
 
         # vel update
         vHat = np.array([[vx,vy,vz]]).T + dT*acc_net
