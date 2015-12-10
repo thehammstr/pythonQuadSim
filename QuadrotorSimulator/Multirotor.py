@@ -196,5 +196,5 @@ class Multirotor:
         #print 'vdot: ',vDot
         #print 'qdot: ',qDot
         #print 'wdot: ',omegadots
-        yDot = np.concatenate((xDot.T[0],vDot,qDot,omegadots),1)
+        yDot = np.concatenate((xDot.T[0],vDot,qDot,omegadots))
         return yDot
