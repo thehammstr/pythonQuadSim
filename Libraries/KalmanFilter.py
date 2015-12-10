@@ -364,7 +364,7 @@ class MEKF:
         self.q = AQ.Quaternion([0,0,0])
         self.processNoise = processNoise
         self.initialized = False
-        self.initializationCounter = 100
+        self.initializationCounter = 00
         self.firstGPS = False
 
     def warmStart(self,acc,gyro,OtherMeas,dT):
@@ -426,7 +426,7 @@ class MEKF:
         # Rotate accel into world
         accBias = np.array([[abx,aby,abz]]).T
         acc_world = np.dot(att.asRotMat.T,accMeas-accBias)
-        print "accBias_w: ",accBias.T, "gyroBias: ",np.array([[bx,by,bz]])
+        #print "accBias_w: ",accBias.T, "gyroBias: ",np.array([[bx,by,bz]])
         # subtract gravity
         acc_net = acc_world - np.array([[0,0,-9.81]]).T
         ##
@@ -525,7 +525,7 @@ class MEKF:
           magWorld = (1./np.linalg.norm(magWorld))*magWorld
           expectedMag = np.dot(attEst.asRotMat,magWorld)
           err = z - expectedMag
-          print "mag err: ",err.T
+          #print "mag err: ",err.T
           # TODO: check this math
           H = np.hstack(( np.zeros((3,6)), crossMat(z), np.zeros((3,6)) ) )
           Qmeas = meas[2]
@@ -539,7 +539,7 @@ class MEKF:
           gravWorldUnit = np.array([[0,0,-1]]).T
           gravBodyUnit = np.dot(attEst.asRotMat,gravWorldUnit)
           err = z - gravBodyUnit
-          print 'tilt err: ',err.T
+          #print 'tilt err: ',err.T
           H = np.hstack( (np.zeros((3,6)), crossMat(z), np.zeros((3,6)) ) )
           Qmeas = meas[2]
           shur = np.linalg.inv( np.dot(H, np.dot(self.cov,H.T)) + Qmeas)

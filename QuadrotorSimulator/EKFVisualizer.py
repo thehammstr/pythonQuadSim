@@ -14,8 +14,7 @@ import AeroQuaternion as AQ
 import QuadrotorController
 import KinematicEKF
 import KalmanFilter as KF
-# shark imports
-import Shark
+
 
 ############################
 # 
@@ -38,15 +37,20 @@ gpsGood = False
 # Create Quadrotor object
 # and initialize sim stuff
 ###################################
-Quad = Multirotor.Multirotor(fuselageMass = 0.5) # default is quadrotor
+MotorHeightOffset = 0.
+motorPos = [np.array([[.19,-.19,MotorHeightOffset]]).T,
+            np.array([[.19,.19,MotorHeightOffset]]).T,
+            np.array([[-.19,.19,MotorHeightOffset]]).T,
+            np.array([[-.19,-.19,MotorHeightOffset]]).T]
+Quad = Multirotor.Multirotor(fuselageMass = .5,motorPositions = motorPos) # default is quadrotor
 initialAtt = AQ.Quaternion(attitude)
 Quad.stateVector[0,6] = initialAtt.q[0]
 Quad.stateVector[0,7] = initialAtt.q[1]
 Quad.stateVector[0,8] = initialAtt.q[2]
 Quad.stateVector[0,9] = initialAtt.q[3]
 idx = 0
-dt = 0.005
-dtControl = .01
+dt = 0.002
+dtControl = .008
 T = 1.3
 numsteps = 3
 maxInd = int(math.ceil(T/dt))
@@ -61,10 +65,10 @@ controller = QuadrotorController.Controller()
 #--------------------------------------
 # Kalman initialization
 #--------------------------------------
-gyroNoise = .1
-gyroBiasNoise = 1e-8
-accelNoise = 1
-accelBiasNoise = 1e-8
+gyroNoise = .01
+gyroBiasNoise = 1e-10
+accelNoise = .1
+accelBiasNoise = 1e-10
 sensorNoise = np.diag([gyroNoise,gyroNoise,gyroNoise,
                       gyroBiasNoise, gyroBiasNoise, gyroBiasNoise,
                       accelNoise,accelNoise,accelNoise,
@@ -340,7 +344,7 @@ def runDynamics():
       print dT, 'x y ht: ', state[0,0], ' ', state[0,1], ' ', state[0,2]
       lastTime = Time
     # simulate measurements
-    accMeas = acc +  accelNoise*np.array([np.random.randn(3)]).T + np.array([[.0],[.1],[.0]]) 
+    accMeas = acc +  accelNoise*np.array([np.random.randn(3)]).T + np.array([[.0],[.0],[.0]]) 
     gyroMeas = state.T[10:] + gyroNoise*np.array([np.random.randn(3)]).T + np.array([[0.],[0],[.01]]) #+ np.array
     # set it askew
     accMeas = np.dot(AQ.Quaternion([0,0,0]).asRotMat,accMeas)
@@ -358,15 +362,15 @@ def runDynamics():
     if (Time - lastControlTime > dtControl and Time - lastMAG >= 1./MAG_FREQ):
       otherMeas.append(['mag',magMeas,magCov,earthMagReading])
       lastMAG = Time
-    if (Time - lastControlTime > dtControl and Time - lastGPS >= 0.2):
+    if (Time - lastControlTime > dtControl and Time - lastGPS >= 3.):
       velWorld = np.dot(attTrue.asRotMat.T,state[0:1,3:6].T)
       gpsMeas = np.vstack((state[0:1,0:3].T,velWorld)) + .01*np.array([np.random.randn(6)]).T + np.array([[.0],[.0],[.0],[.0],[.0],[.0]])
       #print gpsMeas
       if (gpsGood):
-        otherMeas.append(['gps',gpsMeas,np.diag([1,1,50,1,1,10])])
-      otherMeas.append(['baro',state[0:1,2:3],np.array([[1]]) ])
+        otherMeas.append(['gps',gpsMeas,np.diag([1,1,50,.1,.1,10])])
       lastGPS = Time
     # run attitude filter
+    otherMeas.append(['baro',state[0:1,2:3],np.array([[.1]]) ])
     if (Time - lastControlTime > dtControl):
       #attitudeAndGyroBias = AttEstimator.runFilter(accMeas,gyroMeas,otherMeas,dt)
       stateAndCovariance = EKF.runFilter(accMeas,gyroMeas,otherMeas,dtControl)
@@ -477,12 +481,10 @@ def display():
     posGL = np.dot(gl_R_ned.asRotMat,position)
     posGLest = np.dot(gl_R_ned.asRotMat,positionEst)
     if (cameraMode == 'CHASE_CAM'):
-       print posGL.T
        gluLookAt(posGL[0]+chaseCamPos[0],posGL[1]+chaseCamPos[1],posGL[2]+chaseCamPos[2],
                  posGL[0],posGL[1],posGL[2],	
               0,0,1)
     elif (cameraMode == 'CHASE_CAM_EST'):
-       print posGLest.T
        gluLookAt(posGLest[0]+chaseCamPos[0],posGLest[1]+chaseCamPos[1],posGLest[2]+chaseCamPos[2],
                  posGLest[0],posGLest[1],posGLest[2],	
               0,0,1)
