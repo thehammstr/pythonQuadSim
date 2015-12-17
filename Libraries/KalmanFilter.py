@@ -369,9 +369,6 @@ class MEKF:
 
     def warmStart(self,acc,gyro,OtherMeas,dT):
         # accumulate measurements without touching covariance
-        for meas in OtherMeas:
-          if (meas[0] == 'gps'):
-            self.firstGPS = True
         if (self.initializationCounter > 0):
           self.initializationCounter -= 1
           OtherMeas.append(['acc',acc,.1*self.processNoise[6:9,6:9]])
@@ -384,7 +381,6 @@ class MEKF:
           self._resetQuat()
         else:
           self.initialized = True
-          self.firstGPS = True
 
     def runFilter(self,accMeas,gyroMeas,otherMeas,dT):
         '''
@@ -500,13 +496,25 @@ class MEKF:
       attEst = quatFromRotVec(self.state[6:9])*self.q
       for meas in Measurements:
         if (meas[0] == 'gps'):
-          z = meas[1]
-          H = np.hstack( (np.eye(6), np.zeros((6,9)) ) )
-          shur = np.linalg.inv( np.dot(H, np.dot(self.cov,H.T)) + meas[2] )
-          K = np.dot( np.dot(self.cov,H.T) , shur )
-          self.state = self.state + np.dot(K, z - self.state[0:6,0:1])
-          self.updateCovariance(K,H)
-          #print np.diag(self.cov)
+          if (self.firstGPS == False):
+            self.firstGPS = True
+            self.state[0] = meas[1][0]
+            self.state[1] = meas[1][1]
+            self.state[2] = meas[1][2]
+            self.covariance[0,0] = meas[2][0,0]
+            self.covariance[1,1] = meas[2][1,1]
+            self.covariance[2,2] = meas[2][2,2]
+            self.state[9] = 0.0
+            self.state[10] = 0.0
+            self.state[11] = 0.0
+          else:
+            z = meas[1]
+            H = np.hstack( (np.eye(6), np.zeros((6,9)) ) )
+            shur = np.linalg.inv( np.dot(H, np.dot(self.cov,H.T)) + meas[2] )
+            K = np.dot( np.dot(self.cov,H.T) , shur )
+            self.state = self.state + np.dot(K, z - self.state[0:6,0:1])
+            self.updateCovariance(K,H)
+            #print np.diag(self.cov)
         if (meas[0] == 'baro'):
           z = meas[1]
           H = np.array([[0, 0, 1, 0,0,0,0,0,0,0,0,0,0,0,0]])
@@ -534,18 +542,20 @@ class MEKF:
           self.state = self.state + np.dot(K, err)
           self.updateCovariance(K,H)
         if (meas[0] == 'acc'):
-          z = meas[1] - self.state[9:12]
-          z = (1./(np.linalg.norm(z)+1E-13))*z
-          gravWorldUnit = np.array([[0,0,-1]]).T
-          gravBodyUnit = np.dot(attEst.asRotMat,gravWorldUnit)
-          err = z - gravBodyUnit
-          #print 'tilt err: ',err.T
-          H = np.hstack( (np.zeros((3,6)), crossMat(z), np.zeros((3,6)) ) )
-          Qmeas = meas[2]
-          shur = np.linalg.inv( np.dot(H, np.dot(self.cov,H.T)) + Qmeas)
-          K = np.dot( np.dot(self.cov,H.T) , shur )
-          self.state = self.state + np.dot(K, err)
-          self.updateCovariance(K,H)
+          accBias = np.array([self.state[9:12]]).T
+          if (abs(np.linalg.norm(meas[1] - accBias) - 9.81) < 1):
+            z = meas[1] - self.state[9:12]
+            z = (1./(np.linalg.norm(z)+1E-13))*z
+            gravWorldUnit = np.array([[0,0,-1]]).T
+            gravBodyUnit = np.dot(attEst.asRotMat,gravWorldUnit)
+            err = z - gravBodyUnit
+            #print 'tilt err: ',err.T
+            H = np.hstack( (np.zeros((3,6)), crossMat(z), np.zeros((3,6)) ) )
+            Qmeas = meas[2]
+            shur = np.linalg.inv( np.dot(H, np.dot(self.cov,H.T)) + Qmeas)
+            K = np.dot( np.dot(self.cov,H.T) , shur )
+            self.state = self.state + np.dot(K, err)
+            self.updateCovariance(K,H)
         if (meas[0] == 'vel'):
           z = meas[1]
           H = np.hstack( (np.zeros((3,3)), np.eye(3), np.zeros((3,9)) ) )

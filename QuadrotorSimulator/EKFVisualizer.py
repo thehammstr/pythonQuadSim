@@ -344,8 +344,8 @@ def runDynamics():
       print dT, 'x y ht: ', state[0,0], ' ', state[0,1], ' ', state[0,2]
       lastTime = Time
     # simulate measurements
-    accMeas = acc +  accelNoise*np.array([np.random.randn(3)]).T + np.array([[.0],[.0],[.0]]) 
-    gyroMeas = state.T[10:] + gyroNoise*np.array([np.random.randn(3)]).T + np.array([[0.],[0],[.01]]) #+ np.array
+    accMeas = acc +  accelNoise*np.array([np.random.randn(3)]).T + np.array([[1.0],[.0],[.0]]) 
+    gyroMeas = state.T[10:] + gyroNoise*np.array([np.random.randn(3)]).T + np.array([[.3],[.1],[.0]]) #+ np.array
     # set it askew
     accMeas = np.dot(AQ.Quaternion([0,0,0]).asRotMat,accMeas)
     gyroMeas = np.dot(AQ.Quaternion([0,0,0]).asRotMat,gyroMeas)
@@ -362,7 +362,7 @@ def runDynamics():
     if (Time - lastControlTime > dtControl and Time - lastMAG >= 1./MAG_FREQ):
       otherMeas.append(['mag',magMeas,magCov,earthMagReading])
       lastMAG = Time
-    if (Time - lastControlTime > dtControl and Time - lastGPS >= 3.):
+    if (Time - lastControlTime > dtControl and Time - lastGPS >= .5):
       velWorld = np.dot(attTrue.asRotMat.T,state[0:1,3:6].T)
       gpsMeas = np.vstack((state[0:1,0:3].T,velWorld)) + .01*np.array([np.random.randn(6)]).T + np.array([[.0],[.0],[.0],[.0],[.0],[.0]])
       #print gpsMeas
