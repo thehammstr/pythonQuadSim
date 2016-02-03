@@ -364,7 +364,7 @@ def runDynamics():
       lastMAG = Time
     if (Time - lastControlTime > dtControl and Time - lastGPS >= .5):
       velWorld = np.dot(attTrue.asRotMat.T,state[0:1,3:6].T)
-      gpsMeas = np.vstack((state[0:1,0:3].T,velWorld)) + .01*np.array([np.random.randn(6)]).T + np.array([[.0],[.0],[.0],[.0],[.0],[.0]])
+      gpsMeas = np.vstack((state[0:1,0:3].T,velWorld)) + .01*np.array([np.random.randn(6)]).T + np.array([[.0],[.0],[.0],[.0],[.0],[-.1]])
       #print gpsMeas
       if (gpsGood):
         otherMeas.append(['gps',gpsMeas,np.diag([1,1,50,.1,.1,10])])
