@@ -1,7 +1,6 @@
 import numpy as np
 from scipy import optimize
 import matplotlib.pyplot as plt
-from cvxopt import matrix, solvers
 from math import factorial
 
 
@@ -109,13 +108,53 @@ def floatEndpointM(dim,m,n,waypoints,velocities):
         (Nfixed+blocksize-2*dim)+(i-1)*(blocksize-dim):(Nfixed+blocksize-2*dim)+(i-1)*(blocksize-dim) 
         + blocksize-dim] = np.eye(blocksize-dim)
   # final constraints
-  print blocksize
+  #print blocksize
   M[N-blocksize:N-(blocksize-2*dim),
       Nfixed-(2*dim):Nfixed] = np.eye(2*dim)
   M[N-(blocksize-2*dim):N,Nact-(blocksize-2*dim):Nact] = np.eye(blocksize-2*dim)
   Df = np.vstack((Df,waypoints[m],velocities[m] ))
 
   return [M, Df, Nfixed]
+
+def specifyVelocitiesM(dim,m,n,waypoints,velocities):
+  N = dim*m*(n+1)
+  # waypoints fixed and endpoint velocity
+  Nfixed = 2.0*dim*(m+1)
+  Nact = dim*((n+1)/2)*(m+1)
+  Nfree = Nact - Nfixed
+  M = np.zeros((N,Nact))
+  #print M.shape
+  blocksize = (n+1)/2*dim
+  # initial constraints
+  M[0:2*dim,0:2*dim] = np.eye(2*dim)
+  M[2*dim:blocksize,Nfixed:Nfixed+blocksize-(2*dim)] = np.eye(blocksize-2*dim)
+  # middle constraints
+  Df = np.vstack((waypoints[0],velocities[0]))
+  for i in range(1,m):
+    Df = np.vstack((Df,waypoints[i],velocities[i]))
+    for j in range(2):
+      # handle pos
+      fixedx1 = j*(blocksize)+2*(i-1)*blocksize+blocksize 
+      fixedx2 = j*(blocksize)+2*(i-1)*blocksize + blocksize + 2*dim
+      fixedy1 = (2*dim)+2*(i-1)*dim
+      fixedy2 = (2*dim)+2*(i)*dim
+      
+      M[fixedx1:fixedx2,fixedy1:fixedy2] = np.eye(2.0*dim)
+      freex1 = j*(blocksize)+2*(i-1)*blocksize+blocksize+2.0*dim
+      freex2 = j*(blocksize)+2*(i-1)*blocksize+blocksize + blocksize
+      freey1 = (Nfixed+blocksize-2*dim)+(i-1)*(blocksize-2.0*dim)
+      freey2 = (Nfixed+blocksize-2*dim)+(i)*(blocksize-2.0*dim)
+      M[freex1:freex2,freey1:freey2] = np.eye(blocksize-(2.0*dim))
+  # final constraints
+  #print blocksize
+  M[N-blocksize:N-(blocksize-2*dim),
+      Nfixed-(2*dim):Nfixed] = np.eye(2*dim)
+  M[N-(blocksize-2*dim):N,Nact-(blocksize-2*dim):Nact] = np.eye(blocksize-2*dim)
+  Df = np.vstack((Df,waypoints[m],velocities[m] ))
+
+  return [M, Df, Nfixed]
+
+
 
 
 def generateTrajectory(waypoints, velocities,t,k = 3, n = 7, m = 1,dim=2):
@@ -196,13 +235,14 @@ def generateTrajectory(waypoints, velocities,t,k = 3, n = 7, m = 1,dim=2):
   M[N-(n+1)/2*dim:N,Nfixed-(n+1)/2*dim:Nfixed] = np.eye((n+1)/2*dim)
   Df = np.vstack((Df,waypoints[m],velocities[m],np.zeros(((n+1)/2*dim - 2*dim,1)) ))
   '''
-  [M,Df,Nfixed] = fixedEndpointM(dim,m,n,waypoints,velocities)
+  #[M,Df,Nfixed] = fixedEndpointM(dim,m,n,waypoints,velocities)
+  [M,Df,Nfixed] = specifyVelocitiesM(dim,m,n,waypoints,velocities)
   #[M,Df,Nfixed] = floatEndpointM(dim,m,n,waypoints,velocities)
 
-  print Df
+  #print Df
   
   R = np.dot(M.T,np.dot(np.dot(np.dot(Ainv.T,Q),Ainv),M))
-  print Q.shape
+  #print Q.shape
 
   #print R
   
@@ -227,32 +267,32 @@ def J(x,waypoints,velocities,k,n,m,aggression):
 
   [pOpt,Q] = generateTrajectory(waypoints, velocities,times,k, n, m)
 
-  print times[-1], x, np.dot(np.dot(pOpt.T,Q),pOpt)[0,0],  aggression*times[-1], np.dot(np.dot(pOpt.T,Q),pOpt)[0,0] + aggression*times[-1]
+  #print times[-1], x, np.dot(np.dot(pOpt.T,Q),pOpt)[0,0],  aggression*times[-1], np.dot(np.dot(pOpt.T,Q),pOpt)[0,0] + aggression*times[-1]
 
   return np.dot(np.dot(pOpt.T,Q),pOpt)[0,0] + aggression*times[-1]
   
 
 def generateOptimalTrajectory(waypoints, velocities,times,k, n, m, aggression):
-
+  '''
   print 'k ', k
   print 'n ', n
   print 'm ', m
   print 'waypoints ', waypoints
   print 'velocities ', velocities
   print 'times ', times
-
+  '''
   x0 = np.diff(times)
 
 
   bnds = ((1., None),)
   for i in range(1,m):
     bnds += ((0.1,None),)
-  print bnds
+  #print bnds
 
   res = optimize.minimize(J,x0,args=(waypoints,velocities,k,n,m,aggression),bounds=bnds)
   #res = optimize.minimize(J,x0,args=(waypoints,velocities,k,n,m,aggression))
 
-  print res.x
+  #print res.x
 
   times = res.x
   times = np.hstack((times,0))
@@ -273,44 +313,44 @@ def main():
   print pOpt
   '''
   
-  k = 2 # min jerk = 3
-  n = 7 # needs to be odd
-  m = 4
-  dim = 2 # horizontal plane
+  k = 3 # min jerk = 3
+  n = 5 # Order of polynomial for representing position. needs to be odd
+  m = 4 # how many path segments
+  dim = 2 # 2-Dhorizontal plane
   
-  x_0 = np.array([[0.,15.]]).T
+  x_0 = np.array([[0.,0.]]).T
   x_1 = np.array([[15.,0.]]).T
   x_2 = np.array([[19.,1.0]]).T
   x_3 = np.array([[20.,5.]]).T
   x_4 = np.array([[20.,20.]]).T
   
   
-  v_i = np.array([[2.,0.]]).T
+  v_i = np.array([[5.,0.]]).T
   #v_1 = np.array([[1.0,0.0]]).T # Don't constrain intermediate vel
-  v_f = np.array([[0.0,0.0]]).T
-  
-  
-  # actually min jerk
+  v_f = np.array([[0.0,5.0]]).T
   
   waypoints =  [x_0,x_1, x_2, x_3,x_4]
-  times = [0.,3.,4,7.1,12.]
+  times = [0.,3.,4,5.,8.]
   #waypoints =  [x_0, x_1, x_3]
   #times = [0.,  3.06 , 5.3]
   
   velocities = [v_i, np.array([[0.0,0.0]]).T , np.array([[0.0,0.0]]).T,np.array([[0.0,0.0]]).T, v_f]
   #velocities = [v_i, np.array([[0.0,0.0]]).T , v_f]
-  
+  '''
   print waypoints
   print velocities
   print times
-  
-  aggression = 10.
-  
+  '''
+  aggression = 10. # Higher = faster & larger derivatives
+
+  t1 = time.time()
   optimalTimes = generateOptimalTrajectory(waypoints, velocities,times,k, n, m, aggression)
   #optimalTimes = times
+  print "elapsed time: ", time.time()-t1
   [pOpt,Q] = generateTrajectory(waypoints, velocities,optimalTimes,k, n, m, dim)
   #[pOpt,Q] = generateTrajectory(waypoints, velocities,times,k, n, m, dim)
   
+  print "elapsed time: ", time.time()-t1
 
   print times
   print optimalTimes
@@ -326,7 +366,7 @@ def main():
   for wp in waypoints:
     plt.scatter(wp[0,0],wp[1,0])
   
-  TimesVel = np.linspace(0,optimalTimes[-1],num=10)
+  TimesVel = np.linspace(0,optimalTimes[-1],num=30)
   for T in TimesVel:
     pos = queryPlan(T,n,dim,m,optimalTimes,pOpt,0)
     vel = queryPlan(T,n,dim,m,optimalTimes,pOpt,1)
