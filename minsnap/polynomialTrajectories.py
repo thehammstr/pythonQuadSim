@@ -3,6 +3,33 @@ from scipy import optimize
 import matplotlib.pyplot as plt
 from math import factorial
 
+'''
+Marcus Hammond
+June 2016
+
+This code implements the polynomial trajectory generation algorithm presented in 
+
+Richter, Charles, Adam Bry, and Nicholas Roy. 
+"Polynomial trajectory planning for aggressive quadrotor flight
+in dense indoor environments." Robotics Research. 
+Springer International Publishing, 2016. 649-666.
+
+It generates a path between m+1 waypoints with m piecewise polynomials of degree "n".
+The path is chosen such that the integral of the squared magnitude of the k-th derivative
+of the position is minimized over the duration of the path.
+
+For a given set of time intervals, this problem can be expressed as an unconstrained
+quadratic program and solved analytically, with the free parameters expressed in 
+closed form as a function of the fixed parameters.
+
+Additionally, the solution can be scaled with an "aggressiveness" metric to find the
+optimal spacing of time intervals for the trajectory.
+
+***
+NB: It does not currently do explicit velocity or acceleration limiting 
+***
+
+'''
 
 def Hmatrix(k,n,t):
   # Penalty matrix corresponding to the integral of the square of the kth derivative
@@ -19,6 +46,10 @@ def Hmatrix(k,n,t):
 
 
 def Qmatrix(k,n,m,dim,t):
+  #
+  # This is the weighting matrix for the quadratic optimization 
+  # over polynomial coefficients
+  #
   # n is the order of the spline
   # k is the order of the derivative you're trying to minimize
   # m is the number of segments in the trajectory
@@ -35,16 +66,23 @@ def Qmatrix(k,n,m,dim,t):
   return Q
 
 def Arow(k,n,t):
+  #
+  # The output of this function, when multiplied (inner product) with the vector of 
+  # polynomial coefficients gives the kth derivative at time t
+  #
+  # Note that this time t is the time since the start of a segment, not the overall
+  # path time.
+  #
   A = np.zeros((1,n+1));
   for i in range(k,n+1):
     A[0,i] = (factorial(i)/factorial(i-k))*t**(i-k)
-  
-  #print 'k, n, t: ',k,' ',n,' ', t
   return A
 
 def queryPlan(t,n,dim,m,tSwitch,P,deriv=0):
+  #
+  # Return the kth derivative of the plan at time t
+  #
   i = 0
-  #print t,tSwitch[0]
   if m > 1:
     while i < m-1 and t > tSwitch[i+1]:
       #print i
@@ -52,17 +90,33 @@ def queryPlan(t,n,dim,m,tSwitch,P,deriv=0):
 
   path = P[(i)*(n+1)*dim:(i+1)*(n+1)*dim]
   A = np.kron(np.eye(dim),Arow(deriv,n,t-tSwitch[i]))
-  #print path
   return np.dot(A,path)
 
+#
+# The matrices labeled "M" here are referred to as "C" in the paper cited at the top of the file.
+#
+# Sorry about that...
+#
+# These matrices of ones and zeros organize the free and fixed derivatives of the path, determining
+# which are constraints and which are the free parameters used by the optimizer.
+#
+# I haven't yet made these selectable programmatically, so you still have to comment out the calls
+# that you don't want to use.
+#
+
 def fixedEndpointM(dim,m,n,waypoints,velocities):
+  #
+  # This constrains:
+  #   initial and final position and velocity to be those set by the caller
+  #   initial and final derivatives of acceleration and higher = 0
+  #   path goes through waypoints
+  #   smooth derivatives at waypoints.
+  #
   N = dim*m*(n+1)
   Nfixed = dim*(m+1)+2*dim*((n+1)/2 - 1)
   Nact = dim*((n+1)/2)*(m+1)
   Nfree = Nact - Nfixed
   M = np.zeros((N,Nact))
-  #print M.shape
-  
   # initial constraints
   M[0:(n+1)/2*dim,0:(n+1)/2*dim] = np.eye((n+1)/2*dim)
   # middle constraints
@@ -84,13 +138,20 @@ def fixedEndpointM(dim,m,n,waypoints,velocities):
   return [M, Df, Nfixed]
 
 def floatEndpointM(dim,m,n,waypoints,velocities):
+  #
+  # This constrains:
+  #   initial and final position and velocity to be those set by the caller
+  #   path goes through waypoints
+  #   smooth derivatives at waypoints.
+  #
+  # It does not constrain higher order derivatives at start and endpoints
+  #
   N = dim*m*(n+1)
   # waypoints fixed and endpoint velocity
   Nfixed = dim*(m+1)+2*dim
   Nact = dim*((n+1)/2)*(m+1)
   Nfree = Nact - Nfixed
   M = np.zeros((N,Nact))
-  #print M.shape
   blocksize = (n+1)/2*dim
   # initial constraints
   M[0:2*dim,0:2*dim] = np.eye(2*dim)
@@ -108,7 +169,6 @@ def floatEndpointM(dim,m,n,waypoints,velocities):
         (Nfixed+blocksize-2*dim)+(i-1)*(blocksize-dim):(Nfixed+blocksize-2*dim)+(i-1)*(blocksize-dim) 
         + blocksize-dim] = np.eye(blocksize-dim)
   # final constraints
-  #print blocksize
   M[N-blocksize:N-(blocksize-2*dim),
       Nfixed-(2*dim):Nfixed] = np.eye(2*dim)
   M[N-(blocksize-2*dim):N,Nact-(blocksize-2*dim):Nact] = np.eye(blocksize-2*dim)
@@ -117,13 +177,19 @@ def floatEndpointM(dim,m,n,waypoints,velocities):
   return [M, Df, Nfixed]
 
 def specifyVelocitiesM(dim,m,n,waypoints,velocities):
+  #
+  # This specifies:
+  #   position and velocity at each waypoint, including initial and final
+  #   smooth derivatives at waypoints.
+  #
+  # It does not constrain higher order derivatives at start and endpoints
+  #
   N = dim*m*(n+1)
   # waypoints fixed and endpoint velocity
   Nfixed = 2.0*dim*(m+1)
   Nact = dim*((n+1)/2)*(m+1)
   Nfree = Nact - Nfixed
   M = np.zeros((N,Nact))
-  #print M.shape
   blocksize = (n+1)/2*dim
   # initial constraints
   M[0:2*dim,0:2*dim] = np.eye(2*dim)
@@ -146,7 +212,6 @@ def specifyVelocitiesM(dim,m,n,waypoints,velocities):
       freey2 = (Nfixed+blocksize-2*dim)+(i)*(blocksize-2.0*dim)
       M[freex1:freex2,freey1:freey2] = np.eye(blocksize-(2.0*dim))
   # final constraints
-  #print blocksize
   M[N-blocksize:N-(blocksize-2*dim),
       Nfixed-(2*dim):Nfixed] = np.eye(2*dim)
   M[N-(blocksize-2*dim):N,Nact-(blocksize-2*dim):Nact] = np.eye(blocksize-2*dim)
@@ -158,27 +223,19 @@ def specifyVelocitiesM(dim,m,n,waypoints,velocities):
 
 
 def generateTrajectory(waypoints, velocities,t,k = 3, n = 7, m = 1,dim=2):
-
   # Polynomial coefficients are packaged as:
-  
-  # P(t) = [px1 py1 pz1 px2 py2 pz2 ... pxm pym pzm]
-  
-  
+  #
+  # P(t) = [px1 py1 pz1 px2 py2 pz2 ... pxm pym pzm]'
+  #
   # Find the spline of order n that minimizes the integral of the square of the kth derivative
+  #
   H=Hmatrix(3,4,1)
   Q = Qmatrix(k,n,m,dim,t)
   
-  '''Constraints: 
-  
-    Initial pos
-    initial velocity
-    all other initial derivatives zero
-  '''
   A = np.empty((0,dim*m*(n+1)))
   d = np.empty((0,1))
   for seg in range(m):
     # first end
-    #print A.shape, d.shape
     Ax0 = np.hstack( ( np.zeros((dim,seg*dim*(n+1))), np.kron( np.eye(dim), Arow(0,n,0.0) ) , np.zeros((dim,dim*(n+1)*(m-1-seg))) ))
     dx0 = waypoints[seg]
     Axd0 = np.hstack( ( np.zeros((dim,seg*dim*(n+1))), np.kron( np.eye(dim), Arow(1,n,0.0) ) , np.zeros((dim,dim*(n+1)*(m-1-seg))) ))
@@ -203,52 +260,28 @@ def generateTrajectory(waypoints, velocities,t,k = 3, n = 7, m = 1,dim=2):
                         Arow(i,n,t[seg+1]-t[seg]) ) , np.zeros((dim,dim*(n+1)*(m-1-seg))) ))
       A = np.vstack((A,Ax))
       d = np.vstack((d,np.zeros((dim,1))))
-  
-  #print d.shape
-  #print Q.shape
-  
+
   #plt.imshow(A>0)
   #plt.show()
 
+  #
+  # This is where the real magic starts...
+  #
+  
   Ainv = np.linalg.inv(A)
-  #print Ainv
-    
-  '''
-  M = np.zeros((N,Nact))
-  #print M.shape
-  
-  # initial constraints
-  M[0:(n+1)/2*dim,0:(n+1)/2*dim] = np.eye((n+1)/2*dim)
-  # middle constraints
-  Df = np.vstack((waypoints[0],velocities[0],np.zeros(((n+1)/2*dim - 2*dim,1))))
-  for i in range(1,m):
-    blocksize = (n+1)/2*dim
-    Df = np.vstack((Df,waypoints[i]))
-    for j in range(2):
-      # handle pos
-      M[j*(blocksize)+2*(i-1)*blocksize+blocksize:j*(blocksize)+2*(i-1)*blocksize + blocksize + dim,
-           blocksize+(i-1)*dim:blocksize+(i)*dim] = np.eye(dim)
-  
-      M[j*(blocksize)+2*(i-1)*blocksize+blocksize+dim:j*(blocksize)+2*(i-1)*blocksize+blocksize + blocksize,
-        Nfixed+(i-1)*(blocksize-dim):Nfixed+(i-1)*(blocksize-dim) + blocksize-dim] = np.eye(blocksize-dim)
-  # final constraints
-  M[N-(n+1)/2*dim:N,Nfixed-(n+1)/2*dim:Nfixed] = np.eye((n+1)/2*dim)
-  Df = np.vstack((Df,waypoints[m],velocities[m],np.zeros(((n+1)/2*dim - 2*dim,1)) ))
-  '''
+
+  #
+  # Choose which type of constraints you want TODO(mmh): make the choice programmatic
+  #
   #[M,Df,Nfixed] = fixedEndpointM(dim,m,n,waypoints,velocities)
   [M,Df,Nfixed] = specifyVelocitiesM(dim,m,n,waypoints,velocities)
   #[M,Df,Nfixed] = floatEndpointM(dim,m,n,waypoints,velocities)
 
-  #print Df
   
   R = np.dot(M.T,np.dot(np.dot(np.dot(Ainv.T,Q),Ainv),M))
-  #print Q.shape
 
-  #print R
-  
   Rpp = R[Nfixed:,Nfixed:].copy()
   Rfp = R[0:Nfixed,Nfixed:].copy()
-  #print Rfp
   
   dStar = np.dot(np.dot(-np.linalg.inv(Rpp),Rfp.T),Df)
   
@@ -258,7 +291,10 @@ def generateTrajectory(waypoints, velocities,t,k = 3, n = 7, m = 1,dim=2):
   return [pOpt, Q]
 
 def J(x,waypoints,velocities,k,n,m,aggression):
-
+  #
+  # This is the cost function used in the outer loop optimization to find the optimal
+  # time intervals
+  #
   times = x
   times = np.hstack((times,0))
   times[0] = 0.
@@ -267,32 +303,25 @@ def J(x,waypoints,velocities,k,n,m,aggression):
 
   [pOpt,Q] = generateTrajectory(waypoints, velocities,times,k, n, m)
 
-  #print times[-1], x, np.dot(np.dot(pOpt.T,Q),pOpt)[0,0],  aggression*times[-1], np.dot(np.dot(pOpt.T,Q),pOpt)[0,0] + aggression*times[-1]
-
   return np.dot(np.dot(pOpt.T,Q),pOpt)[0,0] + aggression*times[-1]
   
 
 def generateOptimalTrajectory(waypoints, velocities,times,k, n, m, aggression):
-  '''
-  print 'k ', k
-  print 'n ', n
-  print 'm ', m
-  print 'waypoints ', waypoints
-  print 'velocities ', velocities
-  print 'times ', times
-  '''
+  
+  if (not n % 2):
+    print 'Error: n must be odd'
+    return []
+  # The optimizer wants path intervals, not the time at which you reach the waypoint
   x0 = np.diff(times)
 
-
+  # Time intervals should be greater than zero, but if they're exactly zero,
+  # you can get a singular matrix in the analytic step, so constrain the durations
+  # to a small positive value.
   bnds = ((1., None),)
   for i in range(1,m):
     bnds += ((0.1,None),)
-  #print bnds
 
   res = optimize.minimize(J,x0,args=(waypoints,velocities,k,n,m,aggression),bounds=bnds)
-  #res = optimize.minimize(J,x0,args=(waypoints,velocities,k,n,m,aggression))
-
-  #print res.x
 
   times = res.x
   times = np.hstack((times,0))
@@ -303,15 +332,11 @@ def generateOptimalTrajectory(waypoints, velocities,times,k, n, m, aggression):
   return times
 
 
-
+'''
 def main():
 
   # START MAIN CODE
   np.set_printoptions(precision=5,linewidth=120)
-  '''
-  print "pOpt:"
-  print pOpt
-  '''
   
   k = 3 # min jerk = 3
   n = 5 # Order of polynomial for representing position. needs to be odd
@@ -336,11 +361,7 @@ def main():
   
   velocities = [v_i, np.array([[0.0,0.0]]).T , np.array([[0.0,0.0]]).T,np.array([[0.0,0.0]]).T, v_f]
   #velocities = [v_i, np.array([[0.0,0.0]]).T , v_f]
-  '''
-  print waypoints
-  print velocities
-  print times
-  '''
+
   aggression = 10. # Higher = faster & larger derivatives
 
   t1 = time.time()
@@ -378,4 +399,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
+'''
