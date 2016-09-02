@@ -1,8 +1,8 @@
 import numpy as np
 import AeroQuaternion as AQ
-import math 
-import matplotlib.pyplot as plt
-grav = 9.81 
+import math
+#import matplotlib.pyplot as plt
+grav = 9.81
 gravity = np.array([[0.],[0.],[grav]])
 gravdir = np.array([[0.,0.,1.]]).T
 def firstOrdLowpass(val,meas,freq,dt):
@@ -136,7 +136,7 @@ def drdq(i,qx,qy,qz,qw):
 
 def buildFmat(dT, state,accMeas,gyroMeas):
 
-  
+
   x,y,z,vx,vy,vz,qx,qy,qz,qw,abx,aby,abz,bx,by,bz = state.T[0]
   att = AQ.Quaternion([qx,qy,qz,qw])
 
@@ -178,7 +178,7 @@ class KF:
                each tuple has the format
                ['measurement name', measurement value, measurement covariance matrix]
 
-            eg. 
+            eg.
                otherMeas = [['gps', [3x1 np array], [3x3 covariance]], ['barometer', height, sigmasquared ]
         '''
         # integrate EOMs to get predicted mean and covariance
@@ -186,7 +186,7 @@ class KF:
         # update with other measurements
         #if (len(otherMeas) > 0):
         self._updateStep(otherMeas)
-        # all done 
+        # all done
         return [self.state, self.cov]
 
 
@@ -205,7 +205,7 @@ class KF:
         # noise
         RT = np.eye(3)
         R = np.dot(B,np.dot(RT,B.T))
-        # Inject some noise into the estimator 
+        # Inject some noise into the estimator
         self.cov = np.dot(A,np.dot(self.cov,A.T)) + R
 
     def _updateStep(self,Measurements):
@@ -230,7 +230,7 @@ class KF:
           #angle = np.arcsin(np.linalg.norm(axisSinAngle))
           #axis = (1./(np.linalg.norm(axisSinAngle) + 1e-5))*axisSinAngle
 
-      
+
 
 
 #
@@ -241,7 +241,7 @@ class KF:
 
 class EKF:
 
-    ''' 
+    '''
 
        state = [x y z vx vy vz qx qy qz qw accBias gyroBias]'
 
@@ -264,7 +264,7 @@ class EKF:
                each tuple has the format
                ['measurement name', measurement value, measurement covariance matrix]
 
-            eg. 
+            eg.
                otherMeas = [['gps', [3x1 np array], [3x3 covariance]], ['barometer', height, sigmasquared ]
         '''
         # integrate EOMs to get predicted mean and covariance
@@ -272,7 +272,7 @@ class EKF:
         # update with other measurements
         #if (len(otherMeas) > 0):
         self._updateStep(otherMeas)
-        # all done 
+        # all done
         return [self.state, self.cov]
 
 
@@ -314,7 +314,7 @@ class EKF:
         RT = .01*np.eye(6)
         R = np.dot(G,np.dot(RT,G.T))
         #R = 1e-6*np.eye(16)
-        # Inject some noise into the estimator 
+        # Inject some noise into the estimator
         sigma_bias = .01
         R[10:16,10:16] = sigma_bias*np.eye(6)
         self.cov = np.dot(F,np.dot(self.cov,F.T)) + R
@@ -337,7 +337,7 @@ class EKF:
           K = np.dot( np.dot(self.cov,H.T) , shur )
           self.state = self.state + np.dot(K, z - np.dot(H,self.state))
           self.cov = np.dot(np.eye(16) - np.dot(K,H), self.cov)
-      
+
 
 #
 #
@@ -346,7 +346,7 @@ class EKF:
 #
 class MEKF:
 
-    ''' 
+    '''
 
        state = [x y z vx vy vz gibbsx gibbsy gibbsz accBias gyroBias]'
        inputs: gyro, accel
@@ -372,11 +372,11 @@ class MEKF:
         if (self.initializationCounter > 0):
           self.initializationCounter -= 1
           OtherMeas.append(['acc',acc,.1*self.processNoise[6:9,6:9]])
-          # Assume you're not moving fast at initialization 
+          # Assume you're not moving fast at initialization
           OtherMeas.append(['vel',np.zeros((3,1)),.1*np.eye(3)])
           #self._predictStep(acc,gyro,dT)
           self._updateStep(OtherMeas)
-          # Don't estimate biases yet 
+          # Don't estimate biases yet
           #self.state[9:15] = np.zeros((6,1))
           self._resetQuat()
         else:
@@ -390,7 +390,7 @@ class MEKF:
                each tuple has the format
                ['measurement name', measurement value, measurement covariance matrix]
 
-            eg. 
+            eg.
                otherMeas = [['gps', [3x1 np array], [3x3 covariance]], ['barometer', height, sigmasquared ]
         '''
         # integrate EOMs to get predicted mean and covariance
@@ -402,7 +402,7 @@ class MEKF:
           self._updateStep(otherMeas)
           # push gibbs vector onto quat
           self._resetQuat()
-          # all done 
+          # all done
         else:
           self.warmStart(accMeas,gyroMeas,otherMeas,dT)
           print "INITIALIZING MEKF!"
@@ -436,7 +436,7 @@ class MEKF:
         # quaternion state update
         bias = np.array([[bx,by,bz]]).T
         gibbsHat = (gyroMeas-bias)*dT
-        # Pack it up  
+        # Pack it up
         self.state = np.vstack((xHat,vHat,gibbsHat,accBias,bias))
 
 
@@ -564,7 +564,7 @@ class MEKF:
           self.state = self.state + np.dot(K, z - self.state[3:6,0:1])
           self.updateCovariance(K,H)
 
-      
+
 
 
 
@@ -578,20 +578,20 @@ def testHarness():
       filt = KF()
     accel_world = np.array([[0.1,.0,0]]).T
     gravMeas =  np.array([[.0,.0,-9.81]]).T
-    gyro = np.array([[.0,.0,.1]]).T    
+    gyro = np.array([[.0,.0,.1]]).T
     omega = np.linalg.norm(gyro)
     velocity = np.zeros((3,1))
     pos = velocity
     dT = 0.01
     att = AQ.Quaternion([0,0,0])
-    
+
     for ii in range(0,1000):
       #att = AQ.quatFromAxisAngle(gyro,np.linalg.norm(gyro)*dT)*att
       accelerometer = np.dot(att.asRotMat,accel_world+gravMeas)
-      
+
       att = AQ.quatFromAxisAngle(gyro,np.linalg.norm(gyro)*dT)*att
       if (ii%21 == 0):
-        
+
         gps = ['gps',pos,.01*np.eye(3)]
         other = [gps]
       else:

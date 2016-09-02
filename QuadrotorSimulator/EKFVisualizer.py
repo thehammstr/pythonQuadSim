@@ -12,12 +12,11 @@ import math
 import Multirotor
 import AeroQuaternion as AQ
 import QuadrotorController
-import KinematicEKF
 import KalmanFilter as KF
 
 
 ############################
-# 
+#
 #    Begin setup
 #
 ############################
@@ -57,7 +56,7 @@ maxInd = int(math.ceil(T/dt))
 stateHist = np.zeros((numsteps*maxInd,13))
 commands = [0.5,0.5,0.5,0.5]
 # add wind
-#windvel = np.array([[30.,30.,0]]).T 
+#windvel = np.array([[30.,30.,0]]).T
 windvel = np.zeros((3,1))
 # run for a whil
 controller = QuadrotorController.Controller()
@@ -82,7 +81,6 @@ initial_state = np.vstack((initialPos,initialVel,np.zeros((9,1))))
 EKF = KF.MEKF(initialState = initial_state, processNoise = sensorNoise)
 EKF.q = initialAtt
 
-AttEstimator = KinematicEKF.AttitudeComplementaryFilter(initialAttitude=AQ.Quaternion(np.array(attEst)), timeConstant = 10.,Kbias = .00)
 reference = [0.,0.,5.,0.]
 time = 0.
 lastTime = 0.
@@ -98,11 +96,11 @@ Quad.stateVector[0,6:10] = AQ.Quaternion(np.array(attitude)).q
 accMeas = np.zeros((3,1))
 
 
-  
+
 
 def drawQuad(att = [0,0,0], pos = np.zeros((3,1)), color = [1.,0.,0.,1.]):
     global Quad
-    '''glPushMatrix() 
+    '''glPushMatrix()
     xLen = 1
     yLen = 1
     zLen = 1
@@ -200,7 +198,7 @@ def drawQuad(att = [0,0,0], pos = np.zeros((3,1)), color = [1.,0.,0.,1.]):
     glEnd()
     glPopMatrix()
     glPopMatrix()
-   
+
     # drawBody
     glPushMatrix()
     # Rotate before Translate (otherwise weird things happen)
@@ -210,7 +208,7 @@ def drawQuad(att = [0,0,0], pos = np.zeros((3,1)), color = [1.,0.,0.,1.]):
     glutSolidCube(.5)
     glPopMatrix()
     '''
-    # direction 
+    # direction
     glPushMatrix()
     glRotate(90,0,1,0)
     # draw base
@@ -232,7 +230,7 @@ drawQuad.Theta4 = 0
 
 def drawAxes(coneRadius = .2, arrowLength = 2):
     glDisable(GL_CULL_FACE)
-    # x-direction 
+    # x-direction
     glPushMatrix()
     glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, [1,0,0,1]);
     glRotate(90,0,1,0)
@@ -246,7 +244,7 @@ def drawAxes(coneRadius = .2, arrowLength = 2):
     glutSolidCone(.2,.7,20,20)
     glPopMatrix()
 
-    # y-direction 
+    # y-direction
     glPushMatrix()
     glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, [0,1,0,1]);
     glRotate(90,-1,0,0)
@@ -260,7 +258,7 @@ def drawAxes(coneRadius = .2, arrowLength = 2):
     glutSolidCone(.2,.7,20,20)
     glPopMatrix()
 
-    # z-direction 
+    # z-direction
     glPushMatrix()
     glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, [1,1,0,1]);
     # draw base
@@ -285,7 +283,7 @@ def drawAnchor(position):
 
 
 def drawEnvironment():
-    
+
     # ground grid
     glBegin(GL_LINES)
     gridSize = 1000
@@ -295,14 +293,14 @@ def drawEnvironment():
        glVertex3i(-gridSize,ii,0)
        glVertex3i(ii,gridSize,0)
        glVertex3i(ii,-gridSize,0)
-    
+
     glEnd()
 
 
 
 def runDynamics():
     global yaw
-    global height 
+    global height
     global windvel
     global period
     global commands
@@ -325,7 +323,7 @@ def runDynamics():
     global lastControlTime
     global gyroNoise
     global accelNoise
-    
+
     # timing stuff
     Time = clock.time()
     dT = Time - runDynamics.lastTime
@@ -344,7 +342,7 @@ def runDynamics():
       print dT, 'x y ht: ', state[0,0], ' ', state[0,1], ' ', state[0,2]
       lastTime = Time
     # simulate measurements
-    accMeas = acc +  accelNoise*np.array([np.random.randn(3)]).T + np.array([[1.0],[.0],[.0]]) 
+    accMeas = acc +  accelNoise*np.array([np.random.randn(3)]).T + np.array([[1.0],[.0],[.0]])
     gyroMeas = state.T[10:] + gyroNoise*np.array([np.random.randn(3)]).T + np.array([[.3],[.1],[.0]]) #+ np.array
     # set it askew
     accMeas = np.dot(AQ.Quaternion([0,0,0]).asRotMat,accMeas)
@@ -372,7 +370,6 @@ def runDynamics():
     # run attitude filter
     otherMeas.append(['baro',state[0:1,2:3],np.array([[.1]]) ])
     if (Time - lastControlTime > dtControl):
-      #attitudeAndGyroBias = AttEstimator.runFilter(accMeas,gyroMeas,otherMeas,dt)
       stateAndCovariance = EKF.runFilter(accMeas,gyroMeas,otherMeas,dtControl)
       lastControlTime = Time
     # update control
@@ -452,12 +449,12 @@ def main():
     gluPerspective(40.,1.,1.,1000.)
     glMatrixMode(GL_MODELVIEW)
     '''gluLookAt(position[0,0]-30,position[1,0]-0,position[2,0] -20,
-              position[0,0],position[1,0],position[2,0],	
+              position[0,0],position[1,0],position[2,0],
               3,0,2)
     glPushMatrix()'''
 
     # set up quad stuff
- 
+
 
 
     glutMainLoop()
@@ -482,26 +479,26 @@ def display():
     posGLest = np.dot(gl_R_ned.asRotMat,positionEst)
     if (cameraMode == 'CHASE_CAM'):
        gluLookAt(posGL[0]+chaseCamPos[0],posGL[1]+chaseCamPos[1],posGL[2]+chaseCamPos[2],
-                 posGL[0],posGL[1],posGL[2],	
+                 posGL[0],posGL[1],posGL[2],
               0,0,1)
     elif (cameraMode == 'CHASE_CAM_EST'):
        gluLookAt(posGLest[0]+chaseCamPos[0],posGLest[1]+chaseCamPos[1],posGLest[2]+chaseCamPos[2],
-                 posGLest[0],posGLest[1],posGLest[2],	
+                 posGLest[0],posGLest[1],posGLest[2],
               0,0,1)
     elif (cameraMode == 'GROUND_CAM'):
        gluLookAt(0,-30,2,
-                 posGL[0],posGL[1],posGL[2],	
+                 posGL[0],posGL[1],posGL[2],
                  0,0,1)
     elif (cameraMode == 'ONBOARD_CAM'):
        veh_rider = np.dot(gl_R_ned.asRotMat,position + np.dot(veh_R_ned.asRotMat.T,np.array([[2],[0],[-.20]])))
        veh_forward = posGL + np.dot(gl_R_ned.asRotMat,np.dot(veh_R_ned.asRotMat.T,np.array([[1000],[0],[0]])))
        veh_up = np.dot(gl_R_ned.asRotMat,   np.dot(veh_R_ned.asRotMat.T,np.array([[0],[0],[-1]])))
-       gluLookAt(veh_rider[0],veh_rider[1],veh_rider[2],	
-                 veh_forward[0],veh_forward[1],veh_forward[2],	
+       gluLookAt(veh_rider[0],veh_rider[1],veh_rider[2],
+                 veh_forward[0],veh_forward[1],veh_forward[2],
                  veh_up[0],veh_up[1],veh_up[2])
     else:
        gluLookAt(0,-30,10,
-                 0,0,0,	
+                 0,0,0,
               0,3,1)
     glPushMatrix()
 
@@ -523,7 +520,7 @@ def display():
     #glMaterialfv(GL_FRONT_AND_BACK,GL_SPECULAR,color)
     glMaterialfv(GL_FRONT_AND_BACK,GL_EMISSION,emissionColor)
     # push quadrotor position on stack
-    glPushMatrix() 
+    glPushMatrix()
     glTranslate(position[0,0],position[1,0],position[2,0])
     glRotate(attitude[2],0,0,1)
     glRotate(attitude[1],0,1,0)
@@ -536,7 +533,7 @@ def display():
     glPopMatrix()
 
     # push quadrotor estimated  position on stack
-    glPushMatrix() 
+    glPushMatrix()
     color = [1.,1.,0.,1.]
     glMaterialfv(GL_FRONT,GL_EMISSION,color)
 
@@ -643,7 +640,7 @@ def mouseFunc(button,state,x,y):
    global dragStart_x
    global dragStart_y
    global refType
-   global reference 
+   global reference
    global position
    global zCmd
    if (state == GLUT_DOWN):
