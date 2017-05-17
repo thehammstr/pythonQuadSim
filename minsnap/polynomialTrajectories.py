@@ -7,11 +7,11 @@ from math import factorial
 Marcus Hammond
 June 2016
 
-This code implements the polynomial trajectory generation algorithm presented in 
+This code implements the polynomial trajectory generation algorithm presented in
 
-Richter, Charles, Adam Bry, and Nicholas Roy. 
+Richter, Charles, Adam Bry, and Nicholas Roy.
 "Polynomial trajectory planning for aggressive quadrotor flight
-in dense indoor environments." Robotics Research. 
+in dense indoor environments." Robotics Research.
 Springer International Publishing, 2016. 649-666.
 
 It generates a path between m+1 waypoints with m piecewise polynomials of degree "n".
@@ -19,14 +19,14 @@ The path is chosen such that the integral of the squared magnitude of the k-th d
 of the position is minimized over the duration of the path.
 
 For a given set of time intervals, this problem can be expressed as an unconstrained
-quadratic program and solved analytically, with the free parameters expressed in 
+quadratic program and solved analytically, with the free parameters expressed in
 closed form as a function of the fixed parameters.
 
 Additionally, the solution can be scaled with an "aggressiveness" metric to find the
 optimal spacing of time intervals for the trajectory.
 
 ***
-NB: It does not currently do explicit velocity or acceleration limiting 
+NB: It does not currently do explicit velocity or acceleration limiting
 ***
 
 '''
@@ -47,7 +47,7 @@ def Hmatrix(k,n,t):
 
 def Qmatrix(k,n,m,dim,t):
   #
-  # This is the weighting matrix for the quadratic optimization 
+  # This is the weighting matrix for the quadratic optimization
   # over polynomial coefficients
   #
   # n is the order of the spline
@@ -67,7 +67,7 @@ def Qmatrix(k,n,m,dim,t):
 
 def Arow(k,n,t):
   #
-  # The output of this function, when multiplied (inner product) with the vector of 
+  # The output of this function, when multiplied (inner product) with the vector of
   # polynomial coefficients gives the kth derivative at time t
   #
   # Note that this time t is the time since the start of a segment, not the overall
@@ -128,7 +128,7 @@ def fixedEndpointM(dim,m,n,waypoints,velocities):
       # handle pos
       M[j*(blocksize)+2*(i-1)*blocksize+blocksize:j*(blocksize)+2*(i-1)*blocksize + blocksize + dim,
            blocksize+(i-1)*dim:blocksize+(i)*dim] = np.eye(dim)
-  
+
       M[j*(blocksize)+2*(i-1)*blocksize+blocksize+dim:j*(blocksize)+2*(i-1)*blocksize+blocksize + blocksize,
         Nfixed+(i-1)*(blocksize-dim):Nfixed+(i-1)*(blocksize-dim) + blocksize-dim] = np.eye(blocksize-dim)
   # final constraints
@@ -164,9 +164,9 @@ def floatEndpointM(dim,m,n,waypoints,velocities):
       # handle pos
       M[j*(blocksize)+2*(i-1)*blocksize+blocksize:j*(blocksize)+2*(i-1)*blocksize + blocksize + dim,
            (2*dim)+(i-1)*dim:(2*dim)+(i)*dim] = np.eye(dim)
-  
+
       M[j*(blocksize)+2*(i-1)*blocksize+blocksize+dim:j*(blocksize)+2*(i-1)*blocksize+blocksize + blocksize,
-        (Nfixed+blocksize-2*dim)+(i-1)*(blocksize-dim):(Nfixed+blocksize-2*dim)+(i-1)*(blocksize-dim) 
+        (Nfixed+blocksize-2*dim)+(i-1)*(blocksize-dim):(Nfixed+blocksize-2*dim)+(i-1)*(blocksize-dim)
         + blocksize-dim] = np.eye(blocksize-dim)
   # final constraints
   M[N-blocksize:N-(blocksize-2*dim),
@@ -175,6 +175,48 @@ def floatEndpointM(dim,m,n,waypoints,velocities):
   Df = np.vstack((Df,waypoints[m],velocities[m] ))
 
   return [M, Df, Nfixed]
+
+def zeroInitialAccelM(dim,m,n,waypoints,velocities):
+  #
+  # This constrains:
+  #   initial and final position and velocity to be those set by the caller
+  #   path goes through waypoints
+  #   smooth derivatives at waypoints.
+  #   Zero initial acceleration
+  #
+  #
+  N = dim*m*(n+1)
+  # waypoints fixed and endpoint velocity
+  Nfixed = dim*(m+1)+3*dim
+  Nact = dim*((n+1)/2)*(m+1)
+  Nfree = Nact - Nfixed
+  M = np.zeros((N,Nact))
+  blocksize = (n+1)/2*dim
+  # initial constraints
+  M[0:3*dim,0:3*dim] = np.eye(3*dim)
+  # middle constraints
+
+  Df = np.vstack((waypoints[0],velocities[0]))
+
+  for i in range(1,m):
+    Df = np.vstack((Df,waypoints[i]))
+    for j in range(2):
+      # handle pos
+      M[j*(blocksize)+2*(i-1)*blocksize+blocksize:j*(blocksize)+2*(i-1)*blocksize + blocksize + dim,
+           (2*dim)+(i-1)*dim:(2*dim)+(i)*dim] = np.eye(dim)
+
+      M[j*(blocksize)+2*(i-1)*blocksize+blocksize+dim:j*(blocksize)+2*(i-1)*blocksize+blocksize + blocksize,
+        (Nfixed+blocksize-2*dim)+(i-1)*(blocksize-dim):(Nfixed+blocksize-2*dim)+(i-1)*(blocksize-dim)
+        + blocksize-dim] = np.eye(blocksize-dim)
+
+  # final constraints
+  M[N-blocksize:N-(blocksize-2*dim),
+      Nfixed-(2*dim):Nfixed] = np.eye(2*dim)
+  M[N-(blocksize-2*dim):N,Nact-(blocksize-2*dim):Nact] = np.eye(blocksize-2*dim)
+  Df = np.vstack((Df,waypoints[m],velocities[m] ))
+
+  return [M, Df, Nfixed]
+
 
 def specifyVelocitiesM(dim,m,n,waypoints,velocities):
   #
@@ -200,11 +242,11 @@ def specifyVelocitiesM(dim,m,n,waypoints,velocities):
     Df = np.vstack((Df,waypoints[i],velocities[i]))
     for j in range(2):
       # handle pos
-      fixedx1 = j*(blocksize)+2*(i-1)*blocksize+blocksize 
+      fixedx1 = j*(blocksize)+2*(i-1)*blocksize+blocksize
       fixedx2 = j*(blocksize)+2*(i-1)*blocksize + blocksize + 2*dim
       fixedy1 = (2*dim)+2*(i-1)*dim
       fixedy2 = (2*dim)+2*(i)*dim
-      
+
       M[fixedx1:fixedx2,fixedy1:fixedy2] = np.eye(2.0*dim)
       freex1 = j*(blocksize)+2*(i-1)*blocksize+blocksize+2.0*dim
       freex2 = j*(blocksize)+2*(i-1)*blocksize+blocksize + blocksize
@@ -231,7 +273,7 @@ def generateTrajectory(waypoints, velocities,t,k = 3, n = 7, m = 1,dim=2):
   #
   H=Hmatrix(3,4,1)
   Q = Qmatrix(k,n,m,dim,t)
-  
+
   A = np.empty((0,dim*m*(n+1)))
   d = np.empty((0,1))
   for seg in range(m):
@@ -247,16 +289,16 @@ def generateTrajectory(waypoints, velocities,t,k = 3, n = 7, m = 1,dim=2):
       A = np.vstack((A,Ax))
       d = np.vstack((d,np.zeros((dim,1))))
     # second end
-    Ax0 = np.hstack( ( np.zeros((dim,seg*dim*(n+1))), np.kron( np.eye(dim), 
+    Ax0 = np.hstack( ( np.zeros((dim,seg*dim*(n+1))), np.kron( np.eye(dim),
                       Arow(0,n,t[seg+1]-t[seg]) ) , np.zeros((dim,dim*(n+1)*(m-1-seg))) ))
     dx0 = waypoints[seg+1]
-    Axd0 = np.hstack( ( np.zeros((dim,seg*dim*(n+1))), np.kron( np.eye(dim), 
+    Axd0 = np.hstack( ( np.zeros((dim,seg*dim*(n+1))), np.kron( np.eye(dim),
                       Arow(1,n,t[seg+1]-t[seg]) ) , np.zeros((dim,dim*(n+1)*(m-1-seg))) ))
     dxd0 = velocities[seg+1]
     A = np.vstack((A,Ax0,Axd0))
     d = np.vstack((d,dx0,dxd0))
     for i in range(2,(n+1)/2):
-      Ax = np.hstack( ( np.zeros((dim,seg*dim*(n+1))), np.kron( np.eye(dim), 
+      Ax = np.hstack( ( np.zeros((dim,seg*dim*(n+1))), np.kron( np.eye(dim),
                         Arow(i,n,t[seg+1]-t[seg]) ) , np.zeros((dim,dim*(n+1)*(m-1-seg))) ))
       A = np.vstack((A,Ax))
       d = np.vstack((d,np.zeros((dim,1))))
@@ -267,27 +309,28 @@ def generateTrajectory(waypoints, velocities,t,k = 3, n = 7, m = 1,dim=2):
   #
   # This is where the real magic starts...
   #
-  
+
   Ainv = np.linalg.inv(A)
 
   #
   # Choose which type of constraints you want TODO(mmh): make the choice programmatic
   #
-  #[M,Df,Nfixed] = fixedEndpointM(dim,m,n,waypoints,velocities)
-  [M,Df,Nfixed] = specifyVelocitiesM(dim,m,n,waypoints,velocities)
+  [M,Df,Nfixed] = fixedEndpointM(dim,m,n,waypoints,velocities)
+  #[M,Df,Nfixed] = specifyVelocitiesM(dim,m,n,waypoints,velocities)
+  #[M,Df,Nfixed] = zeroInitialAccelM(dim,m,n,waypoints,velocities)
   #[M,Df,Nfixed] = floatEndpointM(dim,m,n,waypoints,velocities)
 
-  
+
   R = np.dot(M.T,np.dot(np.dot(np.dot(Ainv.T,Q),Ainv),M))
 
   Rpp = R[Nfixed:,Nfixed:].copy()
   Rfp = R[0:Nfixed,Nfixed:].copy()
-  
+
   dStar = np.dot(np.dot(-np.linalg.inv(Rpp),Rfp.T),Df)
-  
+
   D = np.vstack((Df,dStar))
   pOpt = np.dot(Ainv,np.dot(M,D))
-  
+
   return [pOpt, Q]
 
 def J(x,waypoints,velocities,k,n,m,aggression):
@@ -304,10 +347,10 @@ def J(x,waypoints,velocities,k,n,m,aggression):
   [pOpt,Q] = generateTrajectory(waypoints, velocities,times,k, n, m)
 
   return np.dot(np.dot(pOpt.T,Q),pOpt)[0,0] + aggression*times[-1]
-  
+
 
 def generateOptimalTrajectory(waypoints, velocities,times,k, n, m, aggression):
-  
+
   if (not n % 2):
     print 'Error: n must be odd'
     return []
@@ -320,6 +363,7 @@ def generateOptimalTrajectory(waypoints, velocities,times,k, n, m, aggression):
   bnds = ((1., None),)
   for i in range(1,m):
     bnds += ((0.1,None),)
+  print bnds, x0
 
   res = optimize.minimize(J,x0,args=(waypoints,velocities,k,n,m,aggression),bounds=bnds)
 
@@ -337,28 +381,28 @@ def main():
 
   # START MAIN CODE
   np.set_printoptions(precision=5,linewidth=120)
-  
+
   k = 3 # min jerk = 3
   n = 5 # Order of polynomial for representing position. needs to be odd
   m = 4 # how many path segments
   dim = 2 # 2-Dhorizontal plane
-  
+
   x_0 = np.array([[0.,0.]]).T
   x_1 = np.array([[15.,0.]]).T
   x_2 = np.array([[19.,1.0]]).T
   x_3 = np.array([[20.,5.]]).T
   x_4 = np.array([[20.,20.]]).T
-  
-  
+
+
   v_i = np.array([[5.,0.]]).T
   #v_1 = np.array([[1.0,0.0]]).T # Don't constrain intermediate vel
   v_f = np.array([[0.0,5.0]]).T
-  
+
   waypoints =  [x_0,x_1, x_2, x_3,x_4]
   times = [0.,3.,4,5.,8.]
   #waypoints =  [x_0, x_1, x_3]
   #times = [0.,  3.06 , 5.3]
-  
+
   velocities = [v_i, np.array([[0.0,0.0]]).T , np.array([[0.0,0.0]]).T,np.array([[0.0,0.0]]).T, v_f]
   #velocities = [v_i, np.array([[0.0,0.0]]).T , v_f]
 
@@ -370,23 +414,23 @@ def main():
   print "elapsed time: ", time.time()-t1
   [pOpt,Q] = generateTrajectory(waypoints, velocities,optimalTimes,k, n, m, dim)
   #[pOpt,Q] = generateTrajectory(waypoints, velocities,times,k, n, m, dim)
-  
+
   print "elapsed time: ", time.time()-t1
 
   print times
   print optimalTimes
-  
+
   x = np.empty((dim,0))
-  
+
   Times = np.linspace(0,optimalTimes[-1],num=200)
   for T in Times:
     x = np.hstack((x,queryPlan(T,n,dim,m,optimalTimes,pOpt)))
-  
+
   plt.plot(x[0,:],x[1,:])
-  
+
   for wp in waypoints:
     plt.scatter(wp[0,0],wp[1,0])
-  
+
   TimesVel = np.linspace(0,optimalTimes[-1],num=30)
   for T in TimesVel:
     pos = queryPlan(T,n,dim,m,optimalTimes,pOpt,0)

@@ -364,14 +364,14 @@ class MEKF:
         self.q = AQ.Quaternion([0,0,0])
         self.processNoise = processNoise
         self.initialized = False
-        self.initializationCounter = 00
+        self.initializationCounter = 100
         self.firstGPS = False
 
     def warmStart(self,acc,gyro,OtherMeas,dT):
         # accumulate measurements without touching covariance
         if (self.initializationCounter > 0):
           self.initializationCounter -= 1
-          OtherMeas.append(['acc',acc,.1*self.processNoise[6:9,6:9]])
+          #OtherMeas.append(['acc',acc,.1*self.processNoise[6:9,6:9]])
           # Assume you're not moving fast at initialization
           OtherMeas.append(['vel',np.zeros((3,1)),.1*np.eye(3)])
           #self._predictStep(acc,gyro,dT)
@@ -457,8 +457,9 @@ class MEKF:
     # build linearized state transition matrix for covariance propagation
     def _buildFmat(self,dT,acc,gyroMeas,bias):
         # build continuous time model
+        dfGibbs_dGibbs = np.zeros((3,3)) #-crossMat(gyroMeas)
         dfGibbs_dGibbs = -crossMat(gyroMeas)
-        dfGibbs_dBias = -np.eye(3)
+        #dfGibbs_dBias = -np.eye(3)
         att = quatFromRotVec(self.state[6:9])*self.q
         dfVel_dGibbs = np.dot(-att.asRotMat.T,crossMat(acc))
         dfVel_daBias = -att.asRotMat.T
@@ -509,10 +510,11 @@ class MEKF:
             self.state[11] = 0.0
           else:
             z = meas[1]
-            H = np.hstack( (np.eye(6), np.zeros((6,9)) ) )
+            z_exp = self.state[0:3,0:1] + np.dot(attEst.asRotMat.T,meas[3])
+            H = np.hstack( (np.eye(3),np.zeros((3,3)), -np.dot(attEst.asRotMat.T,crossMat(meas[3])), np.zeros((3,6)) ) )
             shur = np.linalg.inv( np.dot(H, np.dot(self.cov,H.T)) + meas[2] )
             K = np.dot( np.dot(self.cov,H.T) , shur )
-            self.state = self.state + np.dot(K, z - self.state[0:6,0:1])
+            self.state = self.state + np.dot(K, z - z_exp)
             self.updateCovariance(K,H)
             #print np.diag(self.cov)
         if (meas[0] == 'baro'):

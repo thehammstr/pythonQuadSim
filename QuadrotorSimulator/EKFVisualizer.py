@@ -13,7 +13,7 @@ import Multirotor
 import AeroQuaternion as AQ
 import QuadrotorController
 import KalmanFilter as KF
-
+import drawingUtils
 
 ############################
 #
@@ -95,209 +95,6 @@ Quad.stateVector[0,6:10] = AQ.Quaternion(np.array(attitude)).q
 #np.random.seed([])
 accMeas = np.zeros((3,1))
 
-
-
-
-def drawQuad(att = [0,0,0], pos = np.zeros((3,1)), color = [1.,0.,0.,1.]):
-    global Quad
-    '''glPushMatrix()
-    xLen = 1
-    yLen = 1
-    zLen = 1
-    glTranslate(pos[0,0],pos[1,0],pos[2,0])
-    glPushMatrix()
-    glRotate(att[2],0,0,1)
-    glRotate(att[1],0,1,0)
-    glRotate(att[0],1,0,0)'''
-    # rotor blades
-    drawQuad.Theta1 += Quad.motorList[0].motorState[1]*1
-    drawQuad.Theta2 += Quad.motorList[1].motorState[1]*1
-    drawQuad.Theta3 += Quad.motorList[2].motorState[1]*1
-    drawQuad.Theta4 += Quad.motorList[3].motorState[1]*1
-    emissionColor = [.5,0.,0.,.1]
-    glMaterialfv(GL_FRONT_AND_BACK,GL_DIFFUSE,color)
-    glMaterialfv(GL_FRONT_AND_BACK,GL_EMISSION,emissionColor)
-
-    # draw 4 rings
-    glPushMatrix()
-    glTranslatef(-1.2,1.2,0.)
-    glMaterialfv(GL_FRONT_AND_BACK,GL_DIFFUSE,color)
-    glMaterialfv(GL_FRONT_AND_BACK,GL_EMISSION,emissionColor)
-    glutSolidTorus(.1,1.,20,20)
-    # draw prop
-    glPushMatrix()
-    glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, [0,1,0,1]);
-    glRotate(drawQuad.Theta3,0,0,1)
-    glBegin(GL_TRIANGLES)
-    glVertex3f(0.0,0.0,0.0)
-    glVertex3f(1.0,0.1,0.0)
-    glVertex3f(1.0,-.1,0.0)
-    glVertex3f(0.0,0.0,0.0)
-    glVertex3f(-1.0,-0.1,0.0)
-    glVertex3f(-1.0,.1,0.0)
-    glEnd()
-    glPopMatrix()
-    glPopMatrix()
-
-    glPushMatrix()
-    glTranslatef(1.2,1.2,0.)
-    glMaterialfv(GL_FRONT_AND_BACK,GL_DIFFUSE,color)
-    glMaterialfv(GL_FRONT_AND_BACK,GL_EMISSION,emissionColor)
-    glutSolidTorus(.1,1.,20,20)
-    # draw prop
-    glPushMatrix()
-    glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, [0,1,0,1]);
-    glRotate(drawQuad.Theta2,0,0,-1)
-    glBegin(GL_TRIANGLES)
-    glVertex3f(0.0,0.0,0.0)
-    glVertex3f(1.0,0.1,0.0)
-    glVertex3f(1.0,-.1,0.0)
-    glVertex3f(0.0,0.0,0.0)
-    glVertex3f(-1.0,-0.1,0.0)
-    glVertex3f(-1.0,.1,0.0)
-    glEnd()
-    glPopMatrix()
-    glPopMatrix()
-
-    glPushMatrix()
-    glTranslatef(1.2,-1.2,0.)
-    glMaterialfv(GL_FRONT_AND_BACK,GL_DIFFUSE,color)
-    glMaterialfv(GL_FRONT_AND_BACK,GL_EMISSION,emissionColor)
-    glutSolidTorus(.1,1.,20,20)
-    # draw prop
-    glPushMatrix()
-    glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, [0,1,0,1]);
-    glRotate(drawQuad.Theta1,0,0,1)
-    glBegin(GL_TRIANGLES)
-    glVertex3f(0.0,0.0,0.0)
-    glVertex3f(1.0,0.1,0.0)
-    glVertex3f(1.0,-.1,0.0)
-    glVertex3f(0.0,0.0,0.0)
-    glVertex3f(-1.0,-0.1,0.0)
-    glVertex3f(-1.0,.1,0.0)
-    glEnd()
-    glPopMatrix()
-    glPopMatrix()
-
-    glPushMatrix()
-    glTranslatef(-1.2,-1.2,0.)
-    glMaterialfv(GL_FRONT_AND_BACK,GL_DIFFUSE,color)
-    glMaterialfv(GL_FRONT_AND_BACK,GL_EMISSION,emissionColor)
-    glutSolidTorus(.1,1.,20,20)
-    # draw prop
-    glPushMatrix()
-    glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, [0,1,0,1]);
-    glRotate(drawQuad.Theta4,0,0,-1)
-    glBegin(GL_TRIANGLES)
-    glVertex3f(0.0,0.0,0.0)
-    glVertex3f(1.0,0.1,0.0)
-    glVertex3f(1.0,-.1,0.0)
-    glVertex3f(0.0,0.0,0.0)
-    glVertex3f(-1.0,-0.1,0.0)
-    glVertex3f(-1.0,.1,0.0)
-    glEnd()
-    glPopMatrix()
-    glPopMatrix()
-
-    # drawBody
-    glPushMatrix()
-    # Rotate before Translate (otherwise weird things happen)
-    glRotate(45., 0.0, 0.0, 1.0)
-    glMaterialfv(GL_FRONT_AND_BACK,GL_DIFFUSE,color)
-    glMaterialfv(GL_FRONT_AND_BACK,GL_EMISSION,emissionColor)
-    glutSolidCube(.5)
-    glPopMatrix()
-    '''
-    # direction
-    glPushMatrix()
-    glRotate(90,0,1,0)
-    # draw base
-    coneRadius = .2
-    arrowLength = 2
-    glDisable(GL_CULL_FACE)
-    # x-axis
-    q = gluNewQuadric()
-    gluCylinder(q,coneRadius/2,coneRadius/2,arrowLength,32,32);
-    glTranslate(0,0,arrowLength)
-    glutSolidCone(.2,.7,20,20)
-    glPopMatrix()'''
-drawQuad.Theta1 = 0
-drawQuad.Theta2 = 0
-drawQuad.Theta3 = 0
-drawQuad.Theta4 = 0
-
-
-
-def drawAxes(coneRadius = .2, arrowLength = 2):
-    glDisable(GL_CULL_FACE)
-    # x-direction
-    glPushMatrix()
-    glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, [1,0,0,1]);
-    glRotate(90,0,1,0)
-    # draw base
-    coneRadius = .2
-    arrowLength = 2
-    glDisable(GL_CULL_FACE)
-    q = gluNewQuadric()
-    gluCylinder(q,coneRadius/2,coneRadius/2,arrowLength,32,32);
-    glTranslate(0,0,arrowLength)
-    glutSolidCone(.2,.7,20,20)
-    glPopMatrix()
-
-    # y-direction
-    glPushMatrix()
-    glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, [0,1,0,1]);
-    glRotate(90,-1,0,0)
-    # draw base
-    coneRadius = .2
-    arrowLength = 2
-    glDisable(GL_CULL_FACE)
-    #q = gluNewQuadric()
-    gluCylinder(q,coneRadius/2,coneRadius/2,arrowLength,32,32);
-    glTranslate(0,0,arrowLength)
-    glutSolidCone(.2,.7,20,20)
-    glPopMatrix()
-
-    # z-direction
-    glPushMatrix()
-    glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, [1,1,0,1]);
-    # draw base
-    coneRadius = .2
-    arrowLength = 2
-    glDisable(GL_CULL_FACE)
-    #q = gluNewQuadric()
-    gluCylinder(q,coneRadius/2,coneRadius/2,arrowLength,32,32);
-    glTranslate(0,0,arrowLength)
-    glutSolidCone(.2,.7,20,20)
-    glPopMatrix()
-
-
-
-
-
-def drawAnchor(position):
-    glBegin(GL_LINES)
-    glVertex3f(position[0,0],position[1,0],position[2,0])
-    glVertex3f(position[0,0],position[1,0],0)
-    glEnd()
-
-
-def drawEnvironment():
-
-    # ground grid
-    glBegin(GL_LINES)
-    gridSize = 1000
-    step = 15
-    for ii in range(-gridSize,gridSize+step,step):
-       glVertex3i(gridSize,ii,0)
-       glVertex3i(-gridSize,ii,0)
-       glVertex3i(ii,gridSize,0)
-       glVertex3i(ii,-gridSize,0)
-
-    glEnd()
-
-
-
 def runDynamics():
     global yaw
     global height
@@ -334,7 +131,7 @@ def runDynamics():
     # else update state
     disturbance = 10
     if (Time - startTime > 2 and Time - startTime < 10):
-        pass #wind = np.array([[10,0,0]]).T
+        pass #w/ind = np.array([[10,0,0]]).T
 
     state,acc = Quad.updateState(dt,commands,windVelocity = wind,disturbance = disturbance)
 
@@ -342,8 +139,8 @@ def runDynamics():
       print dT, 'x y ht: ', state[0,0], ' ', state[0,1], ' ', state[0,2]
       lastTime = Time
     # simulate measurements
-    accMeas = acc +  accelNoise*np.array([np.random.randn(3)]).T + np.array([[1.0],[.0],[.0]])
-    gyroMeas = state.T[10:] + gyroNoise*np.array([np.random.randn(3)]).T + np.array([[.3],[.1],[.0]]) #+ np.array
+    accMeas = acc +  accelNoise*np.array([np.random.randn(3)]).T + np.array([[0.0],[.0],[.0]])
+    gyroMeas = state.T[10:] + gyroNoise*np.array([np.random.randn(3)]).T + np.array([[.0],[.0],[.0]]) #+ np.array
     # set it askew
     accMeas = np.dot(AQ.Quaternion([0,0,0]).asRotMat,accMeas)
     gyroMeas = np.dot(AQ.Quaternion([0,0,0]).asRotMat,gyroMeas)
@@ -360,13 +157,16 @@ def runDynamics():
     if (Time - lastControlTime > dtControl and Time - lastMAG >= 1./MAG_FREQ):
       otherMeas.append(['mag',magMeas,magCov,earthMagReading])
       lastMAG = Time
-    if (Time - lastControlTime > dtControl and Time - lastGPS >= .5):
+    if (Time - lastControlTime > dtControl and Time - lastGPS >= .2):
       velWorld = np.dot(attTrue.asRotMat.T,state[0:1,3:6].T)
-      gpsMeas = np.vstack((state[0:1,0:3].T,velWorld)) + .01*np.array([np.random.randn(6)]).T + np.array([[.0],[.0],[.0],[.0],[.0],[-.1]])
+      #gpsMeas = np.vstack((state[0:1,0:3].T,velWorld)) + .01*np.array([np.random.randn(3)]).T + np.array([[.0],[.0],[.0],[.0],[.0],[-.1]])
+      gpsMeas1 = state[0:1,0:3].T + .01*np.array([np.random.randn(3)]).T + np.array([[.0],[.0],[.0]]) + np.dot(attTrue.asRotMat.T,np.array([[1.,0.,0.]]).T)
+      gpsMeas2 = state[0:1,0:3].T + .01*np.array([np.random.randn(3)]).T + np.array([[.0],[.0],[.0]]) + np.dot(attTrue.asRotMat.T,np.array([[-1.,0.,0.]]).T)
       #print gpsMeas
       if (gpsGood):
-        otherMeas.append(['gps',gpsMeas,np.diag([1,1,50,.1,.1,10])])
-      lastGPS = Time
+        otherMeas.append(['gps',gpsMeas1,np.diag([1,1,50]),np.array([[1.,0.,0.]]).T])
+        otherMeas.append(['gps',gpsMeas2,np.diag([1,1,50]),np.array([[-1.,0.,0.]]).T])
+        lastGPS = Time
     # run attitude filter
     otherMeas.append(['baro',state[0:1,2:3],np.array([[.1]]) ])
     if (Time - lastControlTime > dtControl):
@@ -468,6 +268,7 @@ def display():
     global attEst
     global cameraMode
     global EKF
+    global Quad
     positionEst = EKF.state[0:3,0:1]
     glLoadIdentity()
     gl_R_ned = AQ.Quaternion(np.array([0,180,-90]))
@@ -526,7 +327,7 @@ def display():
     glRotate(attitude[1],0,1,0)
     glRotate(attitude[0],1,0,0)
     # draw quadrotor
-    drawQuad(color = [1.,0.,0.,1.])
+    drawQuad(color = [1.,0.,0.,1.],quad = Quad)
     #Shark.drawShark()
     # draw body axes
     drawAxes()
@@ -550,7 +351,7 @@ def display():
     glMaterialfv(GL_FRONT,GL_EMISSION,color)
 
     # draw quadrotor
-    drawQuad(color = [0.,1.,0.,1.])
+    drawQuad(color = [0.,1.,0.,1.],quad=Quad)
     #Shark.drawShark()
     # draw body axes
     drawAxes()

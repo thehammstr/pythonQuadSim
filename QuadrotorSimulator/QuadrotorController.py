@@ -39,7 +39,7 @@ class GainBucket:
 class SecondOrderFilter:
     '''
        class for performing second-order lowpass filter operation
-       supports slew rate limiting 
+       supports slew rate limiting
     '''
     def __init__(self, wn = 10., maxSlew = 1000., minSlew = -100., wrap_pi = False):
         self.wn = wn
@@ -66,7 +66,7 @@ class SecondOrderFilter:
             #            print "fixd.x", self.x, '\n'
         #a =  -2*self.wn*self.v - (self.wn**2)*self.x + (self.wn**2)*input
         a =  -2*self.wn*self.v + (self.wn**2)*angleFromTo(input - self.x,-np.pi,np.pi) # <--- Important addition, makes sure lowpassed angles go the right way!
-        self.x = self.x + self.v*dt  
+        self.x = self.x + self.v*dt
         self.v = max(min(self.v + self.a*dt,self.maxSlew),self.minSlew)
         self.a = a
         return [self.x, self.v]
@@ -84,7 +84,8 @@ class SecondOrderFilter:
             #            print "fixd.x", self.x, '\n'
         #a =  -2*self.wn*self.v - (self.wn**2)*self.x + (self.wn**2)*input
         a =  -2.*self.wn*self.v + (self.wn**2)*(input - self.x) # <--- Important addition, makes sure lowpassed angles go the right way!
-        self.x = self.x + self.v*dt 
+        self.x = self.x + self.v*dt
+        amax = 30
         self.v = max(min(self.v + self.a*dt,self.maxSlew),self.minSlew)
         self.a = a
         return [self.x, self.v]
@@ -121,7 +122,7 @@ class Controller:
         self.gains.rollRate.Kp = 0.15
         self.gains.rollRate.Ki = 0.01
         self.gains.rollRate.Kd = 0.004
-        self.gains.pitchRate.Kp = 0.15 
+        self.gains.pitchRate.Kp = 0.15
         self.gains.pitchRate.Ki = 0.01
         self.gains.pitchRate.Kd = 0.004
         self.gains.yawRate.Kp = .2
@@ -183,13 +184,13 @@ class Controller:
         self.lastvxErr = 0.
         self.lastvyErr = 0.
         self.lastvzErr = 0.
-        
-        
+
+
 
     def updateControl(self,dT,state,reference,refType):
         x,y,z,u,v,w,qx,qy,qz,qw,p,q,r = state[0]
         # extract eulers for control
-        attitude = AQ.Quaternion(np.array([qx,qy,qz,qw])) 
+        attitude = AQ.Quaternion(np.array([qx,qy,qz,qw]))
         worldVel = np.dot(attitude.asRotMat.T,np.array([[u],[v],[w]]))
         roll,pitch,yaw = np.pi/180*attitude.asEuler # convert to rad
         MAX_ANGLE = 30.*np.pi/180
@@ -277,13 +278,13 @@ class Controller:
             # handle z
             if(self.gains.alt.Ki > 0):
              if(vzCmd == MAX_VEL and zErr > 0.):
-               self.heightErrorInt -= zErr*dT 
+               self.heightErrorInt -= zErr*dT
              elif(vzCmd == -MAX_VEL and zErr < 0.):
                self.heightErrorInt -= zErr*dT
             # handle yaw
             if(self.gains.yaw.Ki > 0):
              if(yrCmd == MAX_YR and yawErr > 0.):
-               self.yawErrorInt -= yawErr*dT 
+               self.yawErrorInt -= yawErr*dT
              elif(yrCmd == -MAX_YR and yawErr < 0.):
                self.yawErrorInt -= yawErr*dT
 
@@ -299,18 +300,18 @@ class Controller:
             self.lastvxErr = vxErr
             self.lastvyErr = vyErr
             self.lastvzErr = vzErr
-            
+
             rollRef = min(max(self.gains.vy.Kp*vyErr + self.gains.vy.Kd*vyErrDeriv,-MAX_ANGLE),MAX_ANGLE)
             pitchRef = min(max(-self.gains.vx.Kp*vxErr - self.gains.vx.Kd*vxErrDeriv,-MAX_ANGLE),MAX_ANGLE)
             collective = min(max( .43 - self.gains.alt.Kp*vzErr - self.gains.alt.Kd*vzErrDeriv, 0),1)
             #collective = min(max( .55 - self.gains.alt.Kp*vzErr - self.gains.alt.Kd*vzErrDeriv, 0),1)
-            
+
         elif (refType == 'rpYRt'):
             rollRef,pitchRef,yawRateRef,collective = reference
             #print 'reference',reference
             yawRef = yaw
             hRef = -z
-            
+
             # end anti-windup
         #print 'attitude ', attitude.asEuler
         # Prefilter commanded angles
@@ -324,7 +325,7 @@ class Controller:
         self.filteredYawCmd, self.filteredWzCmd   = self.YawCmdFilter.filterAngle(yawRef,dT)
         self.filteredHtCmd, self.filteredZdotCmd  = self.HtCmdFilter.filter(hRef,dT)
         #collective,collDot = self.CollectiveFilter.filter(collective,dT)
-        #print "coll: ", collective        
+        #print "coll: ", collective
         ################################
         ## BEGIN LOW-LEVEL CONTROLLER
         ################################
@@ -344,7 +345,7 @@ class Controller:
         else:
            yawRateError =  - r
         heightError = self.filteredHtCmd -(-z)
-        heightRateError = self.filteredZdotCmd - (-w) 
+        heightRateError = self.filteredZdotCmd - (-w)
         #print 'err ht: ',heightError,'ref: ',reference,'filt ht cmd: ',self.filteredHtCmd,'href: ',hRef
 
         alf = .6
@@ -364,7 +365,7 @@ class Controller:
         # Error integrals
         ''' Motor numbering convention:
           _          _
-         /1\        /2\ 
+         /1\        /2\
          \_/    ^   \_/
            \  Front /
             \      /
@@ -390,24 +391,24 @@ class Controller:
       	PitchControl = self.gains.pitch.Kp*pitchError + self.gains.pitch.Ki*self.pitchErrorInt + self.gains.pitchRate.Kp*pitchRateError + self.gains.pitchRate.Kd*self.filtqDotErr'''
       	YawControl = self.gains.yaw.Kp*yawError + self.gains.yaw.Ki*self.yawErrorInt + self.gains.yawRate.Kp*yawRateError + self.gains.yawRate.Ki*self.yawRateErrorInt \
 			+ self.gains.yawRate.Kd*self.filtqDotErr
-	
+
         if (refType == 'rpYRt' or refType == 'xyah' or refType == 'rpya'):  # Control mixing for roll pitch yawRate throttle commands
-           
+
            out1 = collective \
               + RollControl \
               + PitchControl\
-              - YawControl     
+              - YawControl
 
            out2 = collective  \
               - RollControl \
               + PitchControl\
-              + YawControl 
-   
+              + YawControl
+
            out3 = collective  \
               - RollControl \
               - PitchControl\
-              - YawControl  
-  
+              - YawControl
+
            out4 = collective  \
               + RollControl \
               - PitchControl\
@@ -421,23 +422,23 @@ class Controller:
            self.RollCmdFilter.reset()
            self.PitchCmdFilter.reset()
            self.YawCmdFilter.reset()
-           self.HtCmdFilter.reset()  
+           self.HtCmdFilter.reset()
         else: # Control mixing for other modes
 
           out1 = trimThrottle + self.gains.alt.Kp*heightError + self.gains.alt.Ki*self.heightErrorInt + self.gains.alt.Kd*heightRateError  \
               + RollControl \
               + PitchControl\
-              - YawControl     
+              - YawControl
 
           out2 = trimThrottle + self.gains.alt.Kp*heightError + self.gains.alt.Ki*self.heightErrorInt + self.gains.alt.Kd*heightRateError  \
               - RollControl \
               + PitchControl\
-              + YawControl 
+              + YawControl
 
           out3 = trimThrottle + self.gains.alt.Kp*heightError + self.gains.alt.Ki*self.heightErrorInt + self.gains.alt.Kd*heightRateError  \
               - RollControl \
               - PitchControl\
-              - YawControl  
+              - YawControl
 
           out4 = trimThrottle + self.gains.alt.Kp*heightError + self.gains.alt.Ki*self.heightErrorInt + self.gains.alt.Kd*heightRateError  \
               + RollControl \
@@ -469,7 +470,7 @@ class Controller:
               out = out + (MIN_THRO - minOut)
           else: #hi cap
             print "HIGH SAT"
-            for out in outs: 
+            for out in outs:
               out = out - (maxOut - MAX_THRO)
         #print ' output: ',np.array([out1,out2,out3,out4])
         #print 'filteredYawCommand: ', self.filteredYawCmd
@@ -479,7 +480,7 @@ class Controller:
 
 
 def unwrapError(angle):
-    
+
     while(angle <= -np.pi):
         angle += 2*math.pi;
     while(angle >= np.pi):
@@ -530,7 +531,7 @@ C++ code to do smarter output saturation
       rollRate_errInt = lastRollRateErrInt;
       yawRate_errInt = lastYawRateErrInt;
       pitchIntegral = lastPitchIntegral;
-      rollIntegral = lastRollIntegral;    
+      rollIntegral = lastRollIntegral;
     } else { // two-sided clipping, probably will never see this. Covers the case where the difference in commanded inputs are greater than the useable range.
       MotorOut1Sat = map(MotorOut1,_MIN_COLL_ - negMargin,_MAX_THRO_ + posMargin, _MIN_COLL_,_MAX_THRO_);
       MotorOut2Sat = map(MotorOut2,_MIN_COLL_ - negMargin,_MAX_THRO_ + posMargin, _MIN_COLL_,_MAX_THRO_);
@@ -542,6 +543,6 @@ C++ code to do smarter output saturation
       yawRate_errInt = lastYawRateErrInt;
       pitchIntegral = lastPitchIntegral;
       rollIntegral = lastRollIntegral;
-    }  
+    }
 '''
 
