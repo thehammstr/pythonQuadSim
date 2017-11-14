@@ -20,80 +20,85 @@ import drawingUtils
 #    Begin setup
 #
 ############################
-name = 'Quadrotor Visualizer'
-yaw = 0
-height = 0;
-position = np.zeros((3,1))
-attitude = [0,0,30]
-attEst = [0,0,00]
-cameraMode = 'CHASE_CAM'
-refType = 'xyah'
-yawCmd = 0.
-zCmd = 10.
-cutMotors = True
-gpsGood = False
-###################################
-# Create Quadrotor object
-# and initialize sim stuff
-###################################
-MotorHeightOffset = 0.
-motorPos = [np.array([[.19,-.19,MotorHeightOffset]]).T,
-            np.array([[.19,.19,MotorHeightOffset]]).T,
-            np.array([[-.19,.19,MotorHeightOffset]]).T,
-            np.array([[-.19,-.19,MotorHeightOffset]]).T]
-Quad = Multirotor.Multirotor(fuselageMass = .5,motorPositions = motorPos) # default is quadrotor
-initialAtt = AQ.Quaternion(attitude)
-Quad.stateVector[0,6] = initialAtt.q[0]
-Quad.stateVector[0,7] = initialAtt.q[1]
-Quad.stateVector[0,8] = initialAtt.q[2]
-Quad.stateVector[0,9] = initialAtt.q[3]
-idx = 0
-dt = 0.002
-dtControl = .008
-T = 1.3
-numsteps = 3
-maxInd = int(math.ceil(T/dt))
-stateHist = np.zeros((numsteps*maxInd,13))
-commands = [0.5,0.5,0.5,0.5]
-# add wind
-#windvel = np.array([[30.,30.,0]]).T
-windvel = np.zeros((3,1))
-# run for a whil
-controller = QuadrotorController.Controller()
+if __name__ == "__main__":
+    name = 'Quadrotor Visualizer'
+    yaw = 0
+    height = 0;
+    position = np.zeros((3,1))
+    attitude = [0,0,30]
+    attEst = [0,0,00]
+    cameraMode = 'CHASE_CAM'
+    refType = 'xyah'
+    yawCmd = 0.
+    zCmd = 10.
+    cutMotors = True
+    gpsGood = False
+    ###################################
+    # Create Quadrotor object
+    # and initialize sim stuff
+    ###################################
+    MotorHeightOffset = 0.
+    motorPos = [np.array([[.19,-.19,MotorHeightOffset]]).T,
+                np.array([[.19,.19,MotorHeightOffset]]).T,
+                np.array([[-.19,.19,MotorHeightOffset]]).T,
+                np.array([[-.19,-.19,MotorHeightOffset]]).T]
+    print "initializing"
+    Quad = Multirotor.Multirotor(fuselageMass = .5,motorPositions = motorPos) # default is quadrotor
+    print "line 45: ",len(Quad.motorList)
+    initialAtt = AQ.Quaternion(attitude)
+    Quad.stateVector[0,6] = initialAtt.q[0]
+    Quad.stateVector[0,7] = initialAtt.q[1]
+    Quad.stateVector[0,8] = initialAtt.q[2]
+    Quad.stateVector[0,9] = initialAtt.q[3]
+    #while(True):
+    #    pass
+    idx = 0
+    dt = 0.002
+    dtControl = .008
+    T = 1.3
+    numsteps = 3
+    maxInd = int(math.ceil(T/dt))
+    stateHist = np.zeros((numsteps*maxInd,13))
+    commands = [0.5,0.5,0.5,0.5]
+    # add wind
+    #windvel = np.array([[30.,30.,0]]).T
+    windvel = np.zeros((3,1))
+    # run for a whil
+    controller = QuadrotorController.Controller()
 
-#--------------------------------------
-# Kalman initialization
-#--------------------------------------
-gyroNoise = .01
-gyroBiasNoise = 1e-10
-accelNoise = .1
-accelBiasNoise = 1e-10
-sensorNoise = np.diag([gyroNoise,gyroNoise,gyroNoise,
-                      gyroBiasNoise, gyroBiasNoise, gyroBiasNoise,
-                      accelNoise,accelNoise,accelNoise,
-                      accelBiasNoise, accelBiasNoise, accelBiasNoise])
-initialPos = np.array([[0,10,0]]).T
-initialVel = np.array([[0,0,0]]).T
-initialAtt = AQ.Quaternion(attEst)
+    #--------------------------------------
+    # Kalman initialization
+    #--------------------------------------
+    gyroNoise = .01
+    gyroBiasNoise = 1e-10
+    accelNoise = .1
+    accelBiasNoise = 1e-10
+    sensorNoise = np.diag([gyroNoise,gyroNoise,gyroNoise,
+                          gyroBiasNoise, gyroBiasNoise, gyroBiasNoise,
+                          accelNoise,accelNoise,accelNoise,
+                          accelBiasNoise, accelBiasNoise, accelBiasNoise])
+    initialPos = np.array([[0,10,0]]).T
+    initialVel = np.array([[0,0,0]]).T
+    initialAtt = AQ.Quaternion(attEst)
 
-initial_state = np.vstack((initialPos,initialVel,np.zeros((9,1))))
+    initial_state = np.vstack((initialPos,initialVel,np.zeros((9,1))))
 
-EKF = KF.MEKF(initialState = initial_state, processNoise = sensorNoise)
-EKF.q = initialAtt
+    EKF = KF.MEKF(initialState = initial_state, processNoise = sensorNoise)
+    EKF.q = initialAtt
 
-reference = [0.,0.,5.,0.]
-time = 0.
-lastTime = 0.
-lastGPS = 0.
-lastMAG = 0.
-lastControlTime = 0.
-MAG_FREQ = 80.
-startTime = clock.time()
-period = dt
-Quad.stateVector[0,2] = 0. # initial height
-Quad.stateVector[0,6:10] = AQ.Quaternion(np.array(attitude)).q
-#np.random.seed([])
-accMeas = np.zeros((3,1))
+    reference = [0.,0.,5.,0.]
+    time = 0.
+    lastTime = 0.
+    lastGPS = 0.
+    lastMAG = 0.
+    lastControlTime = 0.
+    MAG_FREQ = 80.
+    startTime = clock.time()
+    period = dt
+    Quad.stateVector[0,2] = 0. # initial height
+    Quad.stateVector[0,6:10] = AQ.Quaternion(np.array(attitude)).q
+    #np.random.seed([])
+    accMeas = np.zeros((3,1))
 
 def runDynamics():
     global yaw
@@ -132,7 +137,6 @@ def runDynamics():
     disturbance = 10
     if (Time - startTime > 2 and Time - startTime < 10):
         pass #w/ind = np.array([[10,0,0]]).T
-
     state,acc = Quad.updateState(dt,commands,windVelocity = wind,disturbance = disturbance)
 
     if ( Time - lastTime > 1. ):
@@ -182,13 +186,7 @@ def runDynamics():
     controlState[0,0] = EKF.state[0,0]
     controlState[0,1] = EKF.state[1,0]
     controlState[0,2] = EKF.state[2,0]
-    #if (Time - startTime > 5 and Time - startTime <= 12.):
-    #    reference = [5,2,4,0]
-    '''if (Time - startTime > 12):
-        reference = [0,0,15.,np.pi/2]
-    if (Time - startTime > 20 and Time - startTime < 25):
-        commands = controller.updateControl(dt,state,reference,'cut')
-    else:'''
+
     if (refType == 'xyah'):
         reference[3] = yawCmd
     if (refType == 'rpya'):
@@ -248,21 +246,14 @@ def main():
     glMatrixMode(GL_PROJECTION)
     gluPerspective(40.,1.,1.,1000.)
     glMatrixMode(GL_MODELVIEW)
-    '''gluLookAt(position[0,0]-30,position[1,0]-0,position[2,0] -20,
-              position[0,0],position[1,0],position[2,0],
-              3,0,2)
-    glPushMatrix()'''
-
     # set up quad stuff
-
-
 
     glutMainLoop()
     return
 
 def display():
+
     startTime = clock.time()
-    #print startTime,
     global position
     global attitude
     global attEst
@@ -302,72 +293,27 @@ def display():
                  0,0,0,
               0,3,1)
     glPushMatrix()
-
-    glPushMatrix()
     # rotate into aero convention
     glRotate(180.,1.,1.,0)
-
-
     glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)
     glColor4f(0.,0.,1.,.8)
     color = [0,0.,1.,1.]
     glMaterialfv(GL_FRONT_AND_BACK,GL_EMISSION,color)
     # draw ground
-    drawEnvironment()
-    color = [1.,0.,0.,1.]
-    emissionColor = [.5,0.,0.,.1]
-    drawAxes()
-    glMaterialfv(GL_FRONT_AND_BACK,GL_DIFFUSE,color)
-    #glMaterialfv(GL_FRONT_AND_BACK,GL_SPECULAR,color)
-    glMaterialfv(GL_FRONT_AND_BACK,GL_EMISSION,emissionColor)
-    # push quadrotor position on stack
-    glPushMatrix()
-    glTranslate(position[0,0],position[1,0],position[2,0])
-    glRotate(attitude[2],0,0,1)
-    glRotate(attitude[1],0,1,0)
-    glRotate(attitude[0],1,0,0)
+    drawingUtils.drawEnvironment()
+    drawingUtils.drawAxes()
     # draw quadrotor
-    drawQuad(color = [1.,0.,0.,1.],quad = Quad)
-    #Shark.drawShark()
-    # draw body axes
-    drawAxes()
-    glPopMatrix()
-
+    drawingUtils.drawQuad(att = attitude,color = [1.,0.,0.,1.],pos = position[0:3],quad = Quad)
     # push quadrotor estimated  position on stack
-    glPushMatrix()
     color = [1.,1.,0.,1.]
     glMaterialfv(GL_FRONT,GL_EMISSION,color)
-
-    #glTranslate(position[0,0],position[1,0],position[2,0])
-    glTranslate(positionEst[0,0],positionEst[1,0],positionEst[2,0])
+    # Estimated quad
     attEKF = EKF.q
-    glRotate(attEKF.asEuler[2],0,0,1)
-    glRotate(attEKF.asEuler[1],0,1,0)
-    glRotate(attEKF.asEuler[0],1,0,0)
-    #glRotate(attEst[2],0,0,1)
-    #glRotate(attEst[1],0,1,0)
-    #glRotate(attEst[0],1,0,0)
-    color = [1.,0.,0.,1.]
-    glMaterialfv(GL_FRONT,GL_EMISSION,color)
-
+    attEulerEst = attEKF.asEuler
     # draw quadrotor
-    drawQuad(color = [0.,1.,0.,1.],quad=Quad)
-    #Shark.drawShark()
-    # draw body axes
-    drawAxes()
-    glPopMatrix()
-
-
-    # change color
-    color = [0.0,1.,0.,1.]
-    glMaterialfv(GL_FRONT,GL_EMISSION,color)
-    # draw anchor
-    drawAnchor(position)
-    glPopMatrix()
+    drawingUtils.drawQuad(att=attEulerEst,color = [0.,1.,0.,1.],pos=positionEst[0:3],quad=Quad)
     glPopMatrix()
     glutSwapBuffers()
-    #print clock.time() - startTime
-
     return
 
 

@@ -19,7 +19,7 @@ class Multirotor:
     Inertia = []
     invInertia = []
     v_Q_i = AQ.Quaternion()    # rotation matrix from intertial to body
-    cD = []              # drag coefficient         
+    cD = []              # drag coefficient
     gravity = np.array([[0,0,9.81]]).T    # gravity in inertial
     motorList = []
     externalForce = []
@@ -27,7 +27,7 @@ class Multirotor:
     # State variables
     # state = [x \
     #          y  >-> Position of vehicle cm expressed in inertial frame
-    #          z /  
+    #          z /
     #          u \
     #          v  >-> velocity of vehicle cm in inertial, expressed in vehicle frame
     #          w /
@@ -41,7 +41,7 @@ class Multirotor:
     stateVector = np.zeros((1,13))
     stateVector[0,9] = 1. # unit quat
     # code overhead
-    lastTime = -.01  
+    lastTime = -.01
 
 # Methods
 
@@ -57,6 +57,7 @@ class Multirotor:
                  fuselageInertia = np.array([[.023385, 0, 0],[0, .018751, 0],[0, 0, .030992]]),
                  dragCoefficient = .001,
                  ):
+        print "Init called"
         self.mass = fuselageMass
         self.Inertia = fuselageInertia
         self.cD = dragCoefficient
@@ -67,14 +68,15 @@ class Multirotor:
         Ixy = 0
         Ixz = 0
         Iyz = 0
+        self.motorList = []
         for ii in range(len(motorPositions)):
+            print "motorlist length: ",len(self.motorList)
+            print "motorpositions length: ",len(motorPositions)
             # create motors (doing it with string allows for different prop/motor types
-            createString = ("self.motorList.append(Motor." 
-                           + motorType 
-                           + "(position=motorPositions[ii],direction = motorDirections[ii],m_Q_v=AQ.Quaternion(motorOrientations[ii]),prop=Propeller." 
+            createString = ("self.motorList.append(Motor."
+                           + motorType
+                           + "(position=motorPositions[ii],direction = motorDirections[ii],m_Q_v=AQ.Quaternion(motorOrientations[ii]),prop=Propeller."
                            + propType + "()))")
-            #self.motorList.append(Motor.Motor(position=motorPositions[ii],
-            #                                  v_R_m=motorOrientations[ii]))
             exec createString
             motorMass = self.motorList[ii].mass
             propMass = self.motorList[ii].prop.mass
@@ -89,9 +91,10 @@ class Multirotor:
             Iyz = Iyz + (motorMass+propMass)*(motorPositions[ii][1]*motorPositions[ii][2])[0]
         # add effects of motor and prop intertias to the vehicle
         Imotors = np.array([[Ixx, -Ixy, -Ixz],[-Ixy, Iyy, -Iyz],[-Ixz, -Iyz, Izz]])
-        self.Inertia = self.Inertia + Imotors  
+        self.Inertia = self.Inertia + Imotors
         self.invInertia = np.linalg.inv(self.Inertia)
         print "inertia: ", self.Inertia, 'inverse inertia: ', self.invInertia
+        print len(self.motorList)
 
 
     def updateState(self,dT,motorCommands,windVelocity = np.zeros((3,1)),disturbance = 0,externalForces = []):
@@ -110,7 +113,7 @@ class Multirotor:
                 state = 'ground'
         #print state
         if (state == 'crashed'):
-            return self.stateVector    
+            return self.stateVector
         # update all submodules (motors) and retrieve forces and moments
         for ii in range(len(self.motorList)):
             # update command
@@ -134,7 +137,7 @@ class Multirotor:
         windMagnitude = np.sqrt(np.dot(relWindVector.T,relWindVector))
         eWind = relWindVector/(windMagnitude + .00000000001)
         dragForce = -0.5*airDensity*self.cD*windMagnitude**2*eWind
-        Force = Force + dragForce  
+        Force = Force + dragForce
         # add gravity
         Force = Force + self.mass*np.dot(self.v_Q_i.asRotMat,self.gravity)
         #Force = Force + self.mass*self.gravity
@@ -144,9 +147,9 @@ class Multirotor:
             Kground = 1000
             Kdamp = 50
             Kangle = .001
-            groundForceMag = Kground*self.stateVector[0,2] + Kdamp*np.dot(self.v_Q_i.asRotMat,vel)[2,0] 
+            groundForceMag = Kground*self.stateVector[0,2] + Kdamp*np.dot(self.v_Q_i.asRotMat,vel)[2,0]
             roll,pitch,yaw = self.v_Q_i.asEuler
-            groundPitchMoment = max(min(Kangle*(-Kdamp*pitch - 6*Kdamp*self.stateVector[0,11]),1),-1) 
+            groundPitchMoment = max(min(Kangle*(-Kdamp*pitch - 6*Kdamp*self.stateVector[0,11]),1),-1)
             groundRollMoment = max(min(Kangle*(-Kdamp*roll - 6*Kdamp*self.stateVector[0,10]),1),-1)
             groundYawMoment = Kangle*(-6*Kdamp*self.stateVector[0,12])
             Force = Force + AQ.rotateVector(self.v_Q_i,np.array([[0,0,-groundForceMag]]).T) - Kdamp*vel
