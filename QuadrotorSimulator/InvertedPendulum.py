@@ -5,10 +5,13 @@ import math
 import Motor
 import Propeller
 import AeroQuaternion as AQ
-
+from OpenGL.GLUT import *
+from OpenGL.GLU import *
+from OpenGL.GL import *
 np.random.seed()
 
-class InvertedPendulum
+
+class InvertedPendulum:
 
 # Members
     # Static parameters
@@ -18,7 +21,11 @@ class InvertedPendulum
     roll = 0.0
     pitch = 0.0
     yaw = 0.0
-    radius = .05
+    wheel_radius = .05
+    height = .3
+    depth = .1
+    wheelbase = .30
+    cg = .2
     gravity = np.array([[0,0,9.81]]).T    # gravity in inertial
     # State variables
     # state = [x \
@@ -34,7 +41,7 @@ class InvertedPendulum
     #          pitch rate q
     #          yaw rate r
     stateVector = np.zeros((1,12))
-    stateVector[0,2] = radius. # unit quat
+    stateVector[0,2] = -wheel_radius # unit quat
     # code overhead
     lastTime = -.01
 
@@ -53,63 +60,25 @@ class InvertedPendulum
         # Initialize force and moment vectors
         Force = np.zeros((3,1))
         Moment = np.zeros((3,1))
+        pos = np.array([self.position()]).T
         vel = np.array([self.stateVector[0,3:6]]).T
         omega = np.array([self.stateVector[0,10:]]).T
-        self.v_Q_i = AQ.Quaternion(np.array(self.stateVector[0,6:10]))
-        windVelBody = AQ.rotateVector(self.v_Q_i,windVelocity)
-        state = 'flying'
-        if (self.stateVector[0,2] >= 0 ): # on ground?
-            if (np.dot( AQ.rotateVector(self.v_Q_i.inv(),vel).T ,np.array([[0,0,1]]).T ) > 2.): # falling fast
-                state = 'ground'#'crashed'
-            else:
-                state = 'ground'
-        #print state
-        if (state == 'crashed'):
-            return self.stateVector
-        # update all submodules (motors) and retrieve forces and moments
-        for ii in range(len(self.motorList)):
-            # update command
-            self.motorList[ii].commandMotor(motorCommands[ii])
-            # integrate state
-            self.motorList[ii].updateState(dT,vehicleVelocity=vel,vehicleOmega=omega,windVelocity=windVelBody + disturbance*np.random.randn(3,1))
-            # get aero forces and moments from motor
-            FandM = self.motorList[ii].getForcesAndMoments()
-            # Sum all forces
-            Force = Force + FandM[0]
-            # Sum all moments + r_motor X F_motor
-            Moment = Moment + FandM[1] + np.cross(self.motorList[ii].position.T,FandM[0].T).T
-        # add external forces, if any
-        # each entry in externalForces must be a tuple, the first entry of which is the applied force, and the second of which is the application location.
-        # both of these should be in body frame
-        for exFor in externalForces:
-            Force += exFor[0]
-            Moment += np.cross(exFor[1].T,exFor[0].T).T
-        # add drag force
-        relWindVector = vel-windVelBody
-        windMagnitude = np.sqrt(np.dot(relWindVector.T,relWindVector))
-        eWind = relWindVector/(windMagnitude + .00000000001)
-        dragForce = -0.5*airDensity*self.cD*windMagnitude**2*eWind
-        Force = Force + dragForce
-        # add gravity
-        Force = Force + self.mass*np.dot(self.v_Q_i.asRotMat,self.gravity)
-        #Force = Force + self.mass*self.gravity
-        # add ground force
-        # wheel forces and top forces if fallen
-
-        if (self.stateVector[0,2] >= 0):
-            # Add normal force
-            Kground = 1000
-            Kdamp = 50
-            Kangle = .001
-            groundForceMag = Kground*self.stateVector[0,2] + Kdamp*np.dot(self.v_Q_i.asRotMat,vel)[2,0]
-            roll,pitch,yaw = self.v_Q_i.asEuler
-            groundPitchMoment = max(min(Kangle*(-Kdamp*pitch - 6*Kdamp*self.stateVector[0,11]),1),-1)
-            groundRollMoment = max(min(Kangle*(-Kdamp*roll - 6*Kdamp*self.stateVector[0,10]),1),-1)
-            groundYawMoment = Kangle*(-6*Kdamp*self.stateVector[0,12])
-            Force = Force + AQ.rotateVector(self.v_Q_i,np.array([[0,0,-groundForceMag]]).T) - Kdamp*vel
-            Moment = Moment + np.array([[0.,groundPitchMoment,0.]]).T + np.array([[groundRollMoment,0.,0.]]).T + np.array([[0.,0.,groundYawMoment]]).T
-        self.externalForce = Force
-        self.externalMoment = Moment
+        phi,theta,psi = self.attitude()
+        self.v_Q_i = AQ.Quaternion([phi,theta,psi])
+        # GROUND FORCES
+        # wheel forces and top forces if fallen (ASSUMES FLAT GROUND)
+        # left_wheel_contact = self.pos + i_R_v*[0, -wheelbase/2,0] + [0,0,radius]
+        i_R_v = self.v_Q_i.asRotMat.T
+        cg_pos = pos + np.dot(i_R_v,np.array([[0, 0, -self.cg]]).T)
+        left_wheel_contact = pos + np.dot(i_R_v,np.array([[0,-self.wheelbase/2.0,0]]).T) + np.array([[0.0,0.0,self.wheel_radius]]).T
+        right_wheel_contact= pos + np.dot(i_R_v,np.array([[0, self.wheelbase/2.0,0]]).T) + np.array([[0.0,0.0,self.wheel_radius]]).T
+        top_contact = pos + np.dot(i_R_v,np.array([[0, 0, -self.height]]).T) + np.array([[0.0,0.0,self.depth]]).T
+        contactPoints = [left_wheel_contact,right_wheel_contact,top_contact]
+        GroundForce,GroundMoment = self.groundForces(contactPoints,cg_pos,[])
+        self.externalForce = GroundForce
+        self.externalMoment = GroundMoment
+        # GRAVITY
+        self.externalForce = self.externalForce + self.mass * self.gravity
         #print state, self.mass*np.dot(self.v_Q_i.asRotMat,self.gravity).T
         # solve eoms
         #y = sc.integrate.odeint(self.vehicleEOM,self.stateVector[0,:],np.array([self.lastTime,self.lastTime + dT]))
@@ -117,19 +86,19 @@ class InvertedPendulum
         magOmega = np.linalg.norm(omega)
         axis = 1./(magOmega+1e-15)*omega
         updateQuat = AQ.quatFromAxisAngle(axis,dT*magOmega)
-        self.stateVector = self.stateVector + dT*np.array([self.vehicleEOM(self.stateVector[0,:],0)])
-        newAtt = updateQuat*attitude
-        self.stateVector[0,6:10] = newAtt.q
+        #self.stateVector = self.stateVector + dT*np.array([self.vehicleEOM(self.stateVector[0,:],0)])
+        #newAtt = updateQuat*attitude
+        #self.stateVector[0,6:10] = newAtt.q
         #self.stateVector[0,:] = y[-1][:]
         # Experiments with stupid Euler integration:
         #y = self.stateVector[0,:] + dT*self.vehicleEOM(self.stateVector[0,:],0)
         #self.stateVector[0,6:10] = AQ.normalize(self.stateVector[0,6:10])
-        self.lastTime = self.lastTime + dT
+        #self.lastTime = self.lastTime + dT
         # update rotation matrix
         #print 'euler angles: ',self.v_Q_i.asEuler, 'rates: ',self.stateVector[0,10:]
         #print 'position: ', self.stateVector[0,0:3]
-        measuredAcceleration = 1./self.mass*(self.externalForce  - self.mass*np.dot(self.v_Q_i.asRotMat,self.gravity))
-        return [self.stateVector, measuredAcceleration]
+        #measuredAcceleration = 1./self.mass*(self.externalForce  - self.mass*np.dot(self.v_Q_i.asRotMat,self.gravity))
+        return [self.stateVector,np.zeros((3,1))]
 
 
     def vehicleEOM(self,y,t0):
@@ -155,3 +124,71 @@ class InvertedPendulum
         #print 'wdot: ',omegadots
         yDot = np.concatenate((xDot.T[0],vDot,qDot,omegadots))
         return yDot
+
+    def groundForces(self,contactPoints, cg, Map = []):
+        Force = np.zeros((3,1))
+        Moment = np.zeros((3,1))
+        for point in contactPoints:
+            if (point[2,0] >= 0): # TODO use map
+                # Add normal force
+                Kground = 1000
+                Kdamp = 50 # TODO: need damping?
+                Kangle = .001
+                groundForceMag = Kground*point[2,0]
+                groundForce = np.array([[0,0,-groundForceMag]]).T
+                Force = Force + groundForce
+                Moment = Moment + np.cross((point-cg).T,groundForce.T).T
+        return [Force,Moment]
+
+    def attitude(self):
+        return self.stateVector[0,6:9]
+    def position(self):
+        return self.stateVector[0,0:3]
+
+    def draw(self,color = [1,0,0,1],wheel_color = [0,1,0,1]):
+        glPushMatrix()
+        glTranslate(self.stateVector[0,0],self.stateVector[0,1],self.stateVector[0,2])
+        glPushMatrix()
+        glRotate(180.0/np.pi*self.attitude()[2],0,0,1)
+        glRotate(180.0/np.pi*self.attitude()[1],0,1,0)
+        glRotate(180.0/np.pi*self.attitude()[0],1,0,0)
+        # Body
+        glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, color)
+        q = gluNewQuadric()
+        glPushMatrix()
+        glRotate(90.,1.0,0.0,0.0)
+        gluCylinder(q,self.wheel_radius/4.,self.wheel_radius/4.,self.wheelbase/2.,32,32);
+        glPopMatrix()
+        glPushMatrix()
+        glRotate(-90.,1.0,0.0,0.0)
+        gluCylinder(q,self.wheel_radius/4.,self.wheel_radius/4.,self.wheelbase/2.,32,32);
+        glPopMatrix()
+        glPushMatrix()
+        glRotate(180.,0.0,1.0,0.0)
+        gluCylinder(q,self.wheel_radius/4.,self.wheel_radius/4.,self.height,32,32);
+        glPopMatrix()
+        glPushMatrix()
+        glTranslate(0,0,-self.height)
+        glRotate(180.,0.0,1.0,0.0)
+        gluCylinder(q,self.depth/2,self.depth,self.depth,32,32);
+        glPopMatrix()
+        # Left wheel
+        glPushMatrix()
+        glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, wheel_color)
+        glTranslate(0.0,-self.wheelbase/2,0.0)
+        glPushMatrix()
+        glRotate(90.0,1.0,0.0,0.0)
+        glutSolidTorus(0.01,self.wheel_radius,20,20)
+        glPopMatrix()
+        glPopMatrix()
+        # Right wheel
+        glPushMatrix()
+        glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, wheel_color)
+        glTranslate(0.0,self.wheelbase/2,0.0)
+        glRotate(90.0,1.0,0.0,0.0)
+        glutSolidTorus(0.01,self.wheel_radius,20,20)
+        glPopMatrix()
+
+        glPopMatrix() # body rotation
+        glPopMatrix() # body translation
+

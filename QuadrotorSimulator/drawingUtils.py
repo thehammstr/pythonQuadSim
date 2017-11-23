@@ -130,13 +130,11 @@ def drawAxes(coneRadius = .2, arrowLength = 2):
     glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, [1,0,0,1]);
     glRotate(90,0,1,0)
     # draw base
-    coneRadius = .2
-    arrowLength = 2
     glDisable(GL_CULL_FACE)
     q = gluNewQuadric()
     gluCylinder(q,coneRadius/2,coneRadius/2,arrowLength,32,32);
     glTranslate(0,0,arrowLength)
-    glutSolidCone(.2,.7,20,20)
+    glutSolidCone(coneRadius,2*coneRadius,20,20)
     glPopMatrix()
 
     # y-direction
@@ -144,26 +142,24 @@ def drawAxes(coneRadius = .2, arrowLength = 2):
     glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, [0,1,0,1]);
     glRotate(90,-1,0,0)
     # draw base
-    coneRadius = .2
-    arrowLength = 2
+
     glDisable(GL_CULL_FACE)
     #q = gluNewQuadric()
     gluCylinder(q,coneRadius/2,coneRadius/2,arrowLength,32,32);
     glTranslate(0,0,arrowLength)
-    glutSolidCone(.2,.7,20,20)
+    glutSolidCone(coneRadius,2*coneRadius,20,20)
     glPopMatrix()
 
     # z-direction
     glPushMatrix()
     glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, [1,1,0,1]);
     # draw base
-    coneRadius = .2
-    arrowLength = 2
+
     glDisable(GL_CULL_FACE)
     #q = gluNewQuadric()
     gluCylinder(q,coneRadius/2,coneRadius/2,arrowLength,32,32);
     glTranslate(0,0,arrowLength)
-    glutSolidCone(.2,.7,20,20)
+    glutSolidCone(coneRadius,2*coneRadius,20,20)
     glPopMatrix()
 
 
@@ -181,7 +177,7 @@ def drawEnvironment():
     # ground grid
     glBegin(GL_LINES)
     gridSize = 1000
-    step = 15
+    step = 2
     for ii in range(-gridSize,gridSize+step,step):
        glVertex3i(gridSize,ii,0)
        glVertex3i(-gridSize,ii,0)
