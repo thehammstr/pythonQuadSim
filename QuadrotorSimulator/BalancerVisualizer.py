@@ -7,45 +7,50 @@ import sys
 # common imports
 import numpy as np
 import time as clock
-import math
 # simulation imports
 import InvertedPendulum as IP
 import AeroQuaternion as AQ
-import QuadrotorController
-import KalmanFilter as KF
 import drawingUtils
+
+class MouseHandler:
+    drag_start_x = 0
+    drag_start_y = 0
+    vx_ref = 0
+    yaw_rate_ref = 0
+    camera_mode = "CHASE_CAM"
 
 ############################
 #
 #    Begin setup
 #
 ############################
-if __name__ == "__main__":
+def setup():
+    global name
+    global period
+    global robot
+    global dt
+    global mouse_handler
     name = 'Inverted Pendulum Visualizer'
     yaw = 0
     height = 0;
     position = np.zeros((3,1))
     attitude = [0,0,30]
     attEst = [0,0,00]
-    cameraMode = 'CHASE_CAM'
-    refType = 'xyah'
-    yawCmd = 0.
-    zCmd = 10.
-    cutMotors = True
-    gpsGood = False
+    mouse_handler = MouseHandler()
     ###################################
-    # Create Quadrotor object
+    # Create Robot object
     # and initialize sim stuff
     ###################################
 
-    robot = IP.InvertedPendulum() # default is quadrotor
+    robot = IP.InvertedPendulum()
+    robot.set_attitude_rad(0, .2, 0)
     startTime = clock.time()
-    dt = 0.002
+    dt = 0.001
     period = dt
 
 def runDynamics():
     global period
-    global commands
+    global mouse_handler
     global robot
 
     # timing stuff
@@ -53,7 +58,7 @@ def runDynamics():
     dT = Time - runDynamics.lastTime
     if (dT < period):
         return
-    commands = [0,0]
+    commands = [mouse_handler.vx_ref, mouse_handler.yaw_rate_ref]
     state,acc = robot.updateState(dt,commands)
 
     # only update screen at reasonable rate
@@ -99,26 +104,26 @@ def main():
 def display():
 
     startTime = clock.time()
-    global cameraMode
+    global mouse_handler
     global robot
     position = robot.position()
-    attitude = robot.attitude()
+    attitude = robot.attitude_rad()
+    attitude_deg = 180 / np.pi * attitude
     glLoadIdentity()
     gl_R_ned = AQ.Quaternion(np.array([0,180,-90]))
-    veh_R_ned = AQ.Quaternion(attitude)
-    veh_R_nedEst = AQ.Quaternion(attEst)
-    veh_R_yaw = AQ.Quaternion(np.array([0,0,attitude[2]]))
+    veh_R_ned = AQ.Quaternion(attitude_deg)
+    veh_R_yaw = AQ.Quaternion(np.array([0,0,attitude_deg[2]]))
     chaseCamPos = np.dot(gl_R_ned.asRotMat,np.dot(veh_R_yaw.asRotMat.T,np.array([[-5],[0],[-2]])))
     posGL = np.dot(gl_R_ned.asRotMat,position)
-    if (cameraMode == 'CHASE_CAM'):
+    if (mouse_handler.camera_mode == 'CHASE_CAM'):
        gluLookAt(posGL[0]+chaseCamPos[0],posGL[1]+chaseCamPos[1],posGL[2]+chaseCamPos[2],
                  posGL[0],posGL[1],posGL[2],
               0,0,1)
-    elif (cameraMode == 'GROUND_CAM'):
-       gluLookAt(0,-30,2,
+    elif (mouse_handler.camera_mode == 'GROUND_CAM'):
+       gluLookAt(0,-10,2,
                  posGL[0],posGL[1],posGL[2],
                  0,0,1)
-    elif (cameraMode == 'ONBOARD_CAM'):
+    elif (mouse_handler.camera_mode == 'ONBOARD_CAM'):
        veh_rider = np.dot(gl_R_ned.asRotMat,position + np.dot(veh_R_ned.asRotMat.T,np.array([[2],[0],[-.20]])))
        veh_forward = posGL + np.dot(gl_R_ned.asRotMat,np.dot(veh_R_ned.asRotMat.T,np.array([[1000],[0],[0]])))
        veh_up = np.dot(gl_R_ned.asRotMat,   np.dot(veh_R_ned.asRotMat.T,np.array([[0],[0],[-1]])))
@@ -139,7 +144,7 @@ def display():
     # draw ground
     drawingUtils.drawEnvironment()
     drawingUtils.drawAxes(.01,.1)
-    # draw quadrotor
+    # draw robot
     color = [1.,1.,0.,1.]
     robot.draw()
     glPopMatrix()
@@ -147,90 +152,41 @@ def display():
     return
 
 
-def keyboardHandler(key,x,y):
-    global cameraMode
-    global yawCmd
-    global zCmd
-    global reference
-    global refType
-    global cutMotors
-    global gpsGood
-    speed = 15.
+def keyboardHandler(key_literal,x,y):
+    key = key_literal.decode('UTF-8')
+    print("Keyboard handler",key == 'g')
+    global mouse_handler
     if (key == 'c'):
-       cameraMode = 'CHASE_CAM'
+       mouse_handler.camera_mode = 'CHASE_CAM'
     if (key == 'C'):
-       cameraMode = 'CHASE_CAM_EST'
+       mouse_handler.camera_mode = 'CHASE_CAM_EST'
     if (key == 'g'):
-       cameraMode = 'GROUND_CAM'
+       print("GGGGGGGG")
+       mouse_handler.camera_mode = 'GROUND_CAM'
     if (key == 'f'):
-       cameraMode = 'FIXED_CAM'
+       mouse_handler.camera_mode = 'FIXED_CAM'
     if (key == 'o'):
-       cameraMode = 'ONBOARD_CAM'
-    if (key == '1'):
-       yawCmd -= .2
-    if (key == '2'):
-       yawCmd += .2
-    if (key == 'h'):
-       cutMotors = False
-       reference = [0., 0., zCmd, 0.]
-       yawCmd = 0.
-       refType = 'xyah'
-    if (key == 'G'):
-       if (gpsGood):
-         gpsGood = False
-       else:
-         gpsGood = True
-    if (key == 'L'):
-       zCmd = 5.
-       reference = [position[0,0], position[1,0], 0., yawCmd]
-    if (key == 'K'):
-       cutMotors = True
-    if (key == 'k'):
-       cutMotors = False
-    if (key == 'u'):
-       zCmd += 1.
-       reference[2] = zCmd
-    if (key == 'd'):
-       zCmd -= 1.
-       reference[2] = zCmd
-    if (key == 'w'):
-       reference = [position[0,0] + speed*np.cos(yawCmd) , position[1,0] + speed*np.sin(yawCmd) , zCmd, yawCmd]
-    if (key == 'a'):
-       reference = [position[0,0] + speed*np.sin(yawCmd) , position[1,0] - speed*np.cos(yawCmd), zCmd, yawCmd]
-    if (key == 's'):
-       reference = [position[0,0] - speed*np.sin(yawCmd) , position[1,0] + speed*np.cos(yawCmd), zCmd, yawCmd]
-    if (key == 'z'):
-       reference = [position[0,0] - speed*np.cos(yawCmd) , position[1,0] - speed*np.sin(yawCmd), zCmd, yawCmd]
+       mouse_handler.camera_mode = 'ONBOARD_CAM'
 
 def dragFunc(x,y):
-   global reference
-   global dragStart_x
-   global dragStart_y
-   global yawCmd
-   global zCmd
+   global mouse_handler
    #print 'x: ', x, 'y: ',y
-   xRef = max(min(.01*(x-dragStart_x),.5), -.5)
-   yRef = max(min(.01*(y-dragStart_y),.5), -.5)
-   reference = [xRef, yRef, yawCmd,zCmd]
+   mouse_handler.vx_ref = max(min(-.1*(y-mouse_handler.drag_start_y),5), -5)
+   mouse_handler.yaw_rate_ref = max(min(.01*(x-mouse_handler.drag_start_x),1.5), -1.5)
 
 def mouseFunc(button,state,x,y):
-   global dragStart_x
-   global dragStart_y
+   global mouse_handler
    global refType
-   global reference
    global position
    global zCmd
    if (state == GLUT_DOWN):
-      dragStart_x = x
-      dragStart_y = y
-      refType = 'rpya'
-      reference = [0,0, reference[3],zCmd]
+      mouse_handler.drag_start_x = x
+      mouse_handler.drag_start_y = y
    else:
-      #gl_R_ned = AQ.Quaternion(np.array([0,180,-90]))
-      #posGL = np.dot(gl_R_ned.asRotMat,position)
-      refType = 'xyah'
-      reference = [position[0,0],position[1,0],zCmd,yawCmd]
-      #print 'reference: ', reference
+      mouse_handler.vx_ref = 0
+      mouse_handler.yaw_rate_ref = 0
 
-if __name__ == '__main__': main()
+if __name__ == '__main__':
+    setup()
+    main()
 

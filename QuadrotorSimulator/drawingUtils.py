@@ -1,4 +1,3 @@
-import Multirotor
 import numpy as np
 # openGL imports
 from OpenGL.GLUT import *
@@ -121,45 +120,47 @@ drawQuad.Theta2 = 0
 drawQuad.Theta3 = 0
 drawQuad.Theta4 = 0
 
+# Draw vector in the z-direction
+def drawVector(coneRadius, arrowLength):
+    glDisable(GL_CULL_FACE)
+    q = gluNewQuadric()
+    gluCylinder(q,coneRadius/2,coneRadius/2,arrowLength,32,32);
+    glTranslate(0,0,arrowLength)
+    glutSolidCone(coneRadius,2*coneRadius,20,20)
 
+def drawVectorX(coneRadius, arrowLength):
+    glPushMatrix()
+    glRotate(90,0,1,0)
+    drawVector(coneRadius, arrowLength)
+    glPopMatrix()
+
+def drawVectorY(coneRadius, arrowLength):
+    glPushMatrix()
+    glRotate(90,-1,0,0)
+    drawVector(coneRadius, arrowLength)
+    glPopMatrix()
+
+def drawVectorZ(coneRadius, arrowLength):
+    drawVector(coneRadius, arrowLength)
 
 def drawAxes(coneRadius = .2, arrowLength = 2):
     glDisable(GL_CULL_FACE)
     # x-direction
     glPushMatrix()
     glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, [1,0,0,1]);
-    glRotate(90,0,1,0)
-    # draw base
-    glDisable(GL_CULL_FACE)
-    q = gluNewQuadric()
-    gluCylinder(q,coneRadius/2,coneRadius/2,arrowLength,32,32);
-    glTranslate(0,0,arrowLength)
-    glutSolidCone(coneRadius,2*coneRadius,20,20)
+    drawVectorX(coneRadius, arrowLength)
     glPopMatrix()
 
     # y-direction
     glPushMatrix()
     glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, [0,1,0,1]);
-    glRotate(90,-1,0,0)
-    # draw base
-
-    glDisable(GL_CULL_FACE)
-    #q = gluNewQuadric()
-    gluCylinder(q,coneRadius/2,coneRadius/2,arrowLength,32,32);
-    glTranslate(0,0,arrowLength)
-    glutSolidCone(coneRadius,2*coneRadius,20,20)
+    drawVectorY(coneRadius, arrowLength)
     glPopMatrix()
 
     # z-direction
     glPushMatrix()
     glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, [1,1,0,1]);
-    # draw base
-
-    glDisable(GL_CULL_FACE)
-    #q = gluNewQuadric()
-    gluCylinder(q,coneRadius/2,coneRadius/2,arrowLength,32,32);
-    glTranslate(0,0,arrowLength)
-    glutSolidCone(coneRadius,2*coneRadius,20,20)
+    drawVectorZ(coneRadius, arrowLength)
     glPopMatrix()
 
 
